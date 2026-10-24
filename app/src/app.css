@@ -162,3 +162,9 @@ table.t tr.on td:first-child { background: linear-gradient(transparent 62%, var(
 .badge-line { display: flex; gap: 0.4rem; align-items: center; font-size: var(--fs-xs); font-weight: 700; }
 .hide-sm { display: inline; }
 @media (max-width: 26rem) { .hide-sm { display: none; } .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .clock { font-size: 2.1rem; } .diver-act .btn { min-width: 6.5rem; } }
+
+/* ---- v0.4.0 ---- */
+.dock-in.dock-col { flex-direction: column; gap: 0.5rem; }
+.dock-in.dock-col .grid2 .btn { min-height: 3.5rem; }
+.qual-row { padding-block: 0.75rem; gap: 0.5rem; }
+.qual-row .link { min-height: var(--tap); text-align: left; }

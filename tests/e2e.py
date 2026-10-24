@@ -19,7 +19,7 @@ def ex(label, got, want):
 
 # 保存データの時刻をずらす（潜水中・休息中の表示を確かめるため）
 # 記録は IndexedDB（diveops / kv / state）にある。テストから読み書きする小道具
-IDB = """const idb = (mode, fn) => new Promise((res, rej) => { const o = indexedDB.open('diveops', 1); o.onsuccess = () => { const db = o.result; const t = db.transaction('kv', mode); const out = fn(t.objectStore('kv')); t.oncomplete = () => { db.close(); res(out && out.result); }; t.onerror = () => rej(t.error); }; o.onerror = () => rej(o.error); });
+IDB = """const idb = (mode, fn) => new Promise((res, rej) => { const o = indexedDB.open('diveops'); o.onsuccess = () => { const db = o.result; const t = db.transaction('kv', mode); const out = fn(t.objectStore('kv')); t.oncomplete = () => { db.close(); res(out && out.result); }; t.onerror = () => rej(t.error); }; o.onerror = () => rej(o.error); });
 const getS = async () => JSON.parse(await idb('readonly', st => st.get('state')));
 const putRaw = v => idb('readwrite', st => { st.put(v, 'state'); });
 const keys = () => idb('readonly', st => st.getAllKeys());"""
@@ -52,6 +52,10 @@ async def main():
         await pg.select_option('#n-watch', 'S04')
         await pg.click('[data-act="draft-diver"][data-v="S02"]')
         await pg.click('[data-act="draft-diver"][data-v="S03"]')
+        ex('免許の登録がない隊員は選べても知らせない', await pg.locator('text=潜水士免許の登録がありません').count(), 0)
+        await pg.click('[data-act="draft-diver"][data-v="S04"]')
+        ex('免許の登録がない隊員を選ぶと知らせる', await pg.locator('text=× 潜水士免許の登録がありません：見本 四郎').count(), 1)
+        await pg.click('[data-act="draft-diver"][data-v="S04"]')
         await pg.screenshot(path=SH + '02_new.png')
         ex('新しい事案 はみ出しなし', await overflow(pg), False)
         await pg.click('text=記録を始める')
@@ -213,14 +217,27 @@ async def main():
         # ===== v0.4.0：資格・研修、記録・経歴簿、Excel出力、過去の記録の取り込み =====
         await pg.click('[data-act="go"][data-to="settings"]')
         await pg.click('[data-sheet="member"][data-id="S03"]')
+        ex('隊員シートに職員番号', await pg.locator('.sheet >> text=職員番号 S03').count(), 1)
         await pg.click('[data-act="q-kind"][data-v="研修"]')
-        await pg.fill('#q-name', '水難救助研修'); await pg.fill('#q-date', '2024-10-01'); await pg.fill('#q-no', '第25期')
+        await pg.click('[data-act="q-pick"][data-v="水難救助研修"]')
+        await pg.fill('#q-date', '2024-10-01'); await pg.fill('#q-no', '第25期')
         await pg.click('[data-act="add-qual"]')
-        ex('研修を追加できる', await pg.locator('.sheet >> text=水難救助研修').count() >= 1, True)
+        ex('研修を追加できる（未確認）', await pg.locator('.sheet >> text=水難救助研修（未確認）').count(), 1)
         await pg.click('[data-act="q-kind"][data-v="資格"]')
-        await pg.fill('#q-name', '小型船舶2級'); await pg.fill('#q-date', '2026-01-10'); await pg.fill('#q-exp', '2025-01-01')
+        await pg.click('[data-act="q-pick"][data-v="小型船舶2級"]')
+        await pg.fill('#q-date', '2026-01-10'); await pg.fill('#q-exp', '2025-01-01')
         await pg.click('[data-act="add-qual"]')
-        ex('期限が取得日より前なら追加しない', await pg.locator('.sheet >> text=小型船舶2級').count(), 0)
+        ex('期限が取得日より前なら追加しない', await pg.locator('.sheet .qual-row >> text=小型船舶2級').count(), 0)
+        await pg.fill('#q-exp', ''); await pg.fill('#q-date', '2099-01-01')
+        await pg.click('[data-act="add-qual"]')
+        ex('未来の取得日は追加しない', await pg.locator('.sheet .qual-row >> text=小型船舶2級').count(), 0)
+        await pg.click('[data-act="q-pick"][data-v=""]')
+        await pg.fill('#q-name', '潜水士免許証'); await pg.fill('#q-date', '2025-04-01')
+        await pg.click('[data-act="add-qual"]')
+        ex('「潜水士免許証」は「潜水士免許」にそろえる', await pg.locator('.sheet .qual-row >> text=潜水士免許（未確認）').count() >= 1, True)
+        await pg.fill('#q-who', '担当 一郎')
+        await pg.click('[data-act="confirm-qual"] >> nth=0')
+        ex('担当者が確かめると確認済み', await pg.locator('.sheet >> text=確認 担当 一郎').count(), 1)
         await pg.click('[data-act="sheet-close"]')
         # 過去の記録（台帳の「CSV抽出」の形。記録IDなしの旧形式も）
         past = ('\ufeff日付,職員番号,氏名,区分,事案・訓練名,地点,最大水深(m),潜水時間(分),事案ID,本数,潜降時刻,浮上時刻,減圧停止,体調異常,指揮者\r\n'
@@ -236,6 +253,9 @@ async def main():
         await pg.click('[data-act="back"]')
         # 記録・経歴簿
         await pg.click('[data-act="go"][data-to="records"]')
+        await pg.click('[data-act="rec-period"][data-v="custom"]')
+        await pg.fill('#rec-from', '2026-12-01'); await pg.fill('#rec-to', '2025-01-01'); await pg.dispatch_event('#rec-to', 'change')
+        ex('期間が逆なら出力できない', await pg.locator('[data-act="rec-xlsx"]').is_disabled(), True)
         await pg.click('[data-act="rec-period"][data-v="all"]')
         await pg.click('[data-act="rec-none"]')
         await pg.click('[data-act="rec-member"][data-v="S03"]')
@@ -249,16 +269,33 @@ async def main():
         import shutil; shutil.copy(xp, SH + 'records.xlsx')
         from openpyxl import load_workbook
         wbx = load_workbook(SH + 'records.xlsx')
-        ex('Excelのシート', wbx.sheetnames, ['隊員一覧', '経歴簿_見本 三郎', '経歴簿_過去 太郎', '潜水記録', '資格・研修'])
+        import datetime as dtm
+        ex('Excelのシート', wbx.sheetnames, ['隊員一覧', '経歴簿_見本 三郎', '経歴簿_過去 太郎', '潜水記録（参照用）', '資格・研修'])
         k3 = wbx['経歴簿_見本 三郎']
-        ex('経歴簿の見出しは台帳と同じ並び', [k3.cell(9, c).value for c in (1, 2, 4, 6, 7)], ['No', '日付', '事案・訓練名', '最大水深(m)', '潜水時間(分)'])
-        ex('経歴簿に3本・古い順', [k3.cell(10, 2).value, k3.cell(10, 6).value, k3.cell(11, 6).value, k3.cell(12, 6).value, k3.cell(13, 1).value], ['2025/05/14', 8, 15, 11.5, None])
-        ex('経歴簿の本数', k3['C6'].value, 3)
+        ex('経歴簿の見出しは台帳と同じ並び', [k3.cell(10, c).value for c in (1, 2, 4, 6, 7)], ['No', '日付', '事案・訓練名', '最大水深(m)', '潜水時間(分)'])
+        ex('経歴簿に3本・古い順・日付は日付型', [k3.cell(11, 2).value, k3.cell(11, 6).value, k3.cell(12, 6).value, k3.cell(13, 6).value, k3.cell(14, 1).value], [dtm.datetime(2025, 5, 14), 8, 15, 11.5, None])
+        ex('経歴簿の累計と期間の本数', [k3['B6'].value, k3['C6'].value, k3['B7'].value, k3['C7'].value], ['累計本数', 3, '本数（期間）', 3])
         ex('職員番号は文字のまま', wbx['経歴簿_過去 太郎']['C4'].value, '0123')
-        ex('潜水記録は48列', wbx['潜水記録'].max_column, 48)
-        ex('潜水記録の数式に見える事案名は文字', wbx['潜水記録'].cell(3, 5).data_type, 's')
-        ex('資格・研修', [r[3] for r in wbx['資格・研修'].iter_rows(min_row=2, values_only=True)], ['潜水士免許', '水難救助研修'])
-        ex('隊員一覧の免許なし', [wbx['隊員一覧'].cell(r, 5).value for r in (5, 6)], ['○', '×'])
+        wr = wbx['潜水記録（参照用）']
+        ex('潜水記録は48列・見出しは2行目', [wr.max_column, wr.cell(2, 1).value], [48, '日付'])
+        ex('潜水記録の数式に見える事案名は文字', [wr.cell(r, 5).data_type for r in range(3, wr.max_row + 1) if str(wr.cell(r, 5).value).startswith('=')], ['s'])
+        ex('資格・研修', sorted(r[3] for r in wbx['資格・研修'].iter_rows(min_row=2, values_only=True)), ['水難救助研修', '潜水士免許', '潜水士免許'])
+        ex('隊員一覧の免許', [wbx['隊員一覧'].cell(r, 5).value for r in (5, 6)], ['有', '× 無'])
+        ex('印刷はA4横・1ページ幅', [wbx['経歴簿_見本 三郎'].page_setup.orientation, wbx['経歴簿_見本 三郎'].page_setup.paperSize], ['landscape', 9])
+        # 台帳用CSV
+        async with pg.expect_download() as dl3:
+            await pg.click('[data-act="rec-csv"]')
+        rows3 = list(csv.reader(io.StringIO(open(await (await dl3.value).path(), encoding='utf-8').read().lstrip('\ufeff'))))
+        ex('台帳用CSVは48列・選んだ2人の記録', [len(rows3[0]), sorted({r[1] for r in rows3[1:]})], [48, ['0123', 'S03']])
+        ex('取り込んだ記録の本数はCSVの本数のまま', [r[19] for r in rows3[1:] if r[1] == '0123'], ['1'])
+        await pg.click('[data-act="back"]')
+
+        # 保存先の接続が切れても、次の保存で開き直す（iOS で裏に回ったときなど）
+        await pg.evaluate("new Promise(r => { const o = indexedDB.open('diveops', 99); o.onupgradeneeded = () => {}; o.onsuccess = () => { o.result.close(); r(); }; o.onblocked = () => r(); })")
+        await pg.click('[data-act="go"][data-to="settings"]')
+        await pg.click('[data-act="theme"][data-v="dark"]'); await pg.wait_for_timeout(300)
+        ex('接続が切れた後も保存できる', [await pg.locator('text=保存できませんでした').count(), await pg.evaluate(js("return (await getS()).settings.theme;"), None)], [0, 'dark'])
+        await pg.click('[data-act="theme"][data-v="auto"]'); await pg.wait_for_timeout(200)
         await pg.click('[data-act="back"]')
 
         # 見本を消す：見本の隊員が入った事案も消える
@@ -289,6 +326,10 @@ async def main():
         ex('旧版の記録を引き継ぐ', await pg2.locator('text=これまでの事案').count(), 1)
         mig = await pg2.evaluate(js("return [(await getS()).members.map(m => m.name), localStorage.getItem('diveops.v1') === null, !!localStorage.getItem('diveops.v1.before-idb')];"), None)
         ex('IndexedDB に移り、元は退避', mig, [['旧版 花子'], True, True])
+        # 両方に記録があるときは新しい方（IndexedDB が使えなかった回に localStorage へ保存した、など）
+        await pg2.evaluate("localStorage.setItem('diveops.v1', JSON.stringify({ v: 1, savedAt: '2999-01-01T00:00:00Z', members: [{ id: '2002', name: '新しい 次郎' }], settings: { tank: 10, sac: 20, reserve: 50, startP: 200, theme: 'auto' }, tables: { activeId: 'x', list: [] }, incidents: [] }))")
+        await pg2.reload(); await pg2.wait_for_timeout(500)
+        ex('新しい方の記録を読む', await pg2.evaluate(js("return (await getS()).members.map(m => m.name);"), None), ['新しい 次郎'])
         await pg2.screenshot(path=SH + '12_home_dark.png')
         ex('暗い表示 はみ出しなし', await overflow(pg2), False)
         await b.close()
