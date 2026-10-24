@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>潜水現場記録 職員向けまとめ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap">
+<style>
+/* 配布用A4・1枚。アプリと同じ白黒＋黄（黄は見出しの下線だけ）。印刷するので明るい表示に固定 */
+:root { --ink: #141414; --sub: #4A4A45; --line: #141414; --paper: #FFFFFF; --soft: #F4F4F1; --accent: #FFD400; color-scheme: light; }
+@page { size: A4; margin: 10mm 11mm; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', Meiryo, sans-serif; font-size: 10.8pt; line-height: 1.6; }
+.page { max-width: 188mm; margin: 0 auto; padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 13px; }
+@media print { .page { padding: 0; max-width: none; } }
+header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; border-bottom: 3px solid var(--line); padding-bottom: 6px; flex-wrap: wrap; }
+h1 { font-size: 21pt; font-weight: 900; margin: 0; line-height: 1.15; }
+header p { margin: 0; color: var(--sub); font-size: 9pt; }
+h2 { font-size: 12.5pt; font-weight: 900; margin: 0 0 4px; display: inline-block; background: linear-gradient(transparent 62%, var(--accent) 62%); padding: 0 2px; }
+p { margin: 0; }
+.promise { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.promise div { border: 2px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+.promise b { display: block; font-size: 11.5pt; }
+.promise span { color: var(--sub); font-size: 9.6pt; }
+.map { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.box { border: 1.5px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+.box small { display: block; color: var(--sub); font-weight: 700; font-size: 8pt; }
+.box b { font-size: 11.5pt; }
+.arrow { text-align: center; font-size: 9.6pt; font-weight: 700; line-height: 1.3; }
+.note { color: var(--sub); font-size: 9.6pt; }
+ol.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; counter-reset: s; }
+ol.flow li { counter-increment: s; display: flex; gap: 6px; align-items: baseline; }
+ol.flow li::before { content: counter(s); font-weight: 900; min-width: 1.1em; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.two > section { min-width: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+th, td { border-top: 1px solid var(--line); padding: 3px 4px; text-align: left; vertical-align: top; }
+th { white-space: nowrap; width: 7.5em; font-weight: 700; }
+.inv { background: var(--ink); color: var(--paper); padding: 1px 6px; border-radius: 3px; font-weight: 700; }
+.faq p { margin-bottom: 2px; }
+.faq b { font-weight: 700; }
+footer { border-top: 1.5px solid var(--line); padding-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 10pt; }
+footer b { font-weight: 700; }
+@media (max-width: 560px) {
+  .promise, .map, ol.flow, .two { grid-template-columns: minmax(0, 1fr); }
+  .arrow { padding-block: 2px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+  <h1>潜水現場記録　職員向けまとめ</h1>
+  <p>宮古島市消防本部 潜水隊　v0.4.0</p>
+</header>
+
+<section>
+  <h2>3つの約束</h2>
+  <div class="promise">
+    <div><b>1　判定は「計算の目安」</b><span>ダイブコンピュータと指揮者の判断が優先。</span></div>
+    <div><b>2　1事案1台、その日に送る</b><span>2台に分けると反復潜水が甘く計算される。</span></div>
+    <div><b>3　正本は署の台帳</b><span>スマホは手帳。壊れると未送信の記録は消える。</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>全体像</h2>
+  <div class="map">
+    <div class="box"><small>現場（フロント）</small><b>現場用スマホのアプリ</b><br>記録・潜水表の計算・保存・Excel出力。電波なしで動く</div>
+    <div class="arrow">CSVをメール →<br>← 潜水表ファイル</div>
+    <div class="box"><small>署（バックエンド）</small><b>Excel 潜水管理台帳</b><br>正本。取り込み・経歴簿・報告書PDF。5年保存</div>
+  </div>
+  <p class="note">インターネット上のサーバーはありません。アプリの置き場所（GitHub Pages）はアプリ本体を配るだけで、記録は送られません。</p>
+</section>
+
+<section>
+  <h2>現場の流れ（指揮者・記録係）</h2>
+  <ol class="flow">
+    <li>事案を始める（区分・地点・指揮者・監視員・潜水員）</li>
+    <li>潜降：予定の水深を選ぶ→上限の時間が出る</li>
+    <li>浮上開始：合図で押す（潜水時間はここまで）</li>
+    <li>水面に着いた：最大水深・安全停止・体調異常</li>
+    <li>水面休息：「次に18mなら10分まで」が更新</li>
+    <li>終了の手続き→「事案を終了する」→「メールで送る」</li>
+  </ol>
+  <p class="note">残り5分で太枠、上限を超えると <span class="inv">上限超過</span> と白黒反転。押し間違いはお知らせの「元に戻す」。浮上開始を押し忘れたら「もう水面にいる」。</p>
+</section>
+
+<div class="two">
+  <section>
+    <h2>資格・研修（全員）</h2>
+    <p>設定→自分の名前→<b>職員番号を確かめる</b>→名称をボタンで選ぶ→取得日・期限を入れて追加。表示は「未確認」。担当者が免許証・修了証の写しを見て「確かめた」を押すと確認済み。</p>
+    <p class="note">免許の登録がない人を潜水員に選ぶと「× 潜水士免許の登録がありません」と出る。</p>
+  </section>
+  <section>
+    <h2>記録・経歴簿とExcel</h2>
+    <p>ホーム→「記録・経歴簿」→期間と隊員を選ぶ→「Excel」。シートは隊員一覧・経歴簿（1人1枚）・潜水記録（参照用）・資格・研修。台帳へは「台帳用CSV」を取り込む。</p>
+    <p class="note">ファイルには氏名と体調異常が入る。送り先は署のアドレスだけ。</p>
+  </section>
+</div>
+
+<div class="two">
+  <section>
+    <h2>役割</h2>
+    <table>
+      <tr><th>全員</th><td>3つの約束。自分の資格・研修を入れる</td></tr>
+      <tr><th>指揮者・記録係</th><td>現場で記録し、その日のうちに送る</td></tr>
+      <tr><th>台帳の担当者</th><td>取り込み、資格の確認、報告書PDF、月1回の控え</td></tr>
+      <tr><th>管理者（2名）</th><td>アプリの更新、潜水表の差し替え（2名で照合）</td></tr>
+    </table>
+  </section>
+  <section class="faq">
+    <h2>よくある質問</h2>
+    <p><b>電波がない所でも？</b>　一度開いておけば使える。</p>
+    <p><b>間違えたら？</b>　名前→直したい本→理由を入れて保存。履歴が残る。</p>
+    <p><b>添付が消えたら？</b>　「コピー」で貼って送り、担当者に知らせる。</p>
+    <p><b>スマホを替える？</b>　設定「控えを作る」→新しいスマホで「控えから戻す」。</p>
+    <p><b>ダイコンと違う？</b>　厳しい方に従い、指揮者が判断。</p>
+  </section>
+</div>
+
+<footer>
+  <span><b>アプリ</b>　https://daichiokuhira.github.io/diveops/（ホーム画面に追加し、アイコンから開く）</span>
+  <span><b>管理者</b>　[氏名・連絡先]</span>
+  <span><b>台帳の担当者</b>　[氏名・連絡先]</span>
+  <span class="note">旧アプリ（newdiveplan）は反復潜水の判断に使わない。</span>
+</footer>
+</div>
+</body>
+</html>
