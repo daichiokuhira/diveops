@@ -43,7 +43,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 button, input, select, textarea { font: inherit; color: inherit; }
 .num { font-variant-numeric: tabular-nums; }
 .icon { width: 1.25em; height: 1.25em; flex: none; stroke-width: 2; vertical-align: -0.2em; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; box-shadow: 0 0 0 6px var(--accent); }
+h1[tabindex="-1"]:focus { outline: none; box-shadow: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 /* ---- 外枠 ---- */
@@ -79,11 +80,15 @@ p { margin: 0; }
 .chip { min-height: var(--tap); min-width: 3.5rem; padding: 0 0.9rem; border-radius: var(--r); border: 2px solid var(--ink); background: var(--bg); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; cursor: pointer; touch-action: manipulation; }
 .chip[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--on-accent); }
 .chip .icon { display: none; }
+.chips-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.chips-grid5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.chips-grid5 .chip { min-width: 0; padding: 0 0.25rem; }
 .chip[aria-pressed="true"] .icon { display: inline; }
 
 /* ---- 入力 ---- */
 .field { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
 .field > span { font-size: var(--fs-xs); font-weight: 700; }
+.field > span b { margin-left: 0.5em; font-size: 0.75rem; border: 1px solid currentColor; border-radius: 3px; padding: 0 0.3em; }
 .input { min-height: var(--tap); width: 100%; padding: 0 0.75rem; border: 2px solid var(--ink); border-radius: var(--r); background: var(--bg); }
 textarea.input { padding: 0.6rem 0.75rem; min-height: 5.5rem; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
@@ -99,20 +104,36 @@ textarea.input { padding: 0.6rem 0.75rem; min-height: 5.5rem; }
 .list > .item:last-child { border-bottom: 1px solid var(--ink); }
 .item-main { flex: 1; min-width: 0; }
 .item-title { font-weight: 700; }
+.item-title .state { vertical-align: 0.1em; margin-left: 0.3rem; }
+.dive-line { min-height: var(--tap); }
+.dive-line .item-title .icon { margin-right: 0.3rem; }
+.dive-line.is-deleted { cursor: default; text-decoration: line-through; }
+.notes { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 0.25rem; }
+.wrap-alert { padding-block: 1rem 0; gap: 0.5rem; }
+.btn-quiet { font-weight: 400; text-decoration: underline; text-underline-offset: 3px; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
 .kv dt { font-size: var(--fs-xs); font-weight: 700; padding-top: 0.15rem; }
 .kv dd { margin: 0; }
 
 /* ---- 潜水員ボード ---- */
 .diver { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 1rem; padding-block: 1rem; align-items: center; }
-.diver-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+.diver-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; min-height: var(--tap); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
 .diver-name { font-size: var(--fs-l); font-weight: 700; line-height: 1.2; }
 .state { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--fs-xs); font-weight: 700; border: 1.5px solid var(--ink); border-radius: 999px; padding: 0.05rem 0.55rem; }
 .state.active { background: var(--accent); color: var(--on-accent); border-color: var(--on-accent); }
+.state.on { background: var(--ink); color: var(--bg); }
 .clock { font-family: var(--num); font-size: var(--fs-xl); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.diver-info { grid-column: 1 / -1; font-size: var(--fs-s); }
+.diver-info { grid-column: 1 / -1; font-size: var(--fs-s); display: flex; flex-direction: column; gap: 0.35rem; }
+.diver-info .next { font-size: var(--fs-m); font-weight: 700; }
+.diver-info .next b { font-size: var(--fs-l); }
+/* 上限が近い・超えた：色に頼らず、アイコン・太字・白黒反転で示す */
+.remain:empty { display: none; }
+.remain.warn { display: flex; align-items: center; gap: 0.4rem; font-weight: 700; border: 2px solid var(--ink); border-radius: var(--r); padding: 0.35rem 0.6rem; }
+.remain.over { display: flex; align-items: center; gap: 0.4rem; font-weight: 700; font-size: var(--fs-l); background: var(--ink); color: var(--bg); border-radius: var(--r); padding: 0.4rem 0.7rem; }
 .diver-act { grid-row: 1 / span 2; grid-column: 2; }
+.diver-act { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; }
 .diver-act .btn { min-width: 7.5rem; min-height: 3.75rem; }
+.diver-act .btn-under { min-height: var(--tap); font-size: var(--fs-xs); padding: 0 0.25rem; }
 
 /* ---- 注意表示（色に頼らず、アイコンと太字と枠で示す） ---- */
 .alert { display: flex; gap: 0.6rem; align-items: flex-start; border: 2px solid var(--ink); border-radius: var(--r); padding: 0.75rem 0.85rem; font-weight: 700; }
@@ -148,8 +169,10 @@ table.t tr.on td:first-child { background: linear-gradient(transparent 62%, var(
 @media (min-width: 48rem) { .sheet-back { align-items: center; } .sheet { border: 2px solid var(--ink); border-radius: 12px; max-height: 88%; } }
 
 /* ---- お知らせ ---- */
-.toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(4rem + env(safe-area-inset-top, 0px)); z-index: 50; background: var(--ink); color: var(--bg); border-radius: var(--r); padding: 0.6rem 0.6rem 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; max-width: calc(100% - 32px); font-weight: 700; }
-.toast .btn { min-height: 2.5rem; border-color: var(--bg); background: var(--ink); color: var(--bg); }
+/* 記録した行を隠さないよう、下部の固定ボタンの上に出す */
+.toast { position: fixed; left: 16px; right: 16px; margin: 0 auto; max-width: 44rem; bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)); z-index: 50; background: var(--ink); color: var(--bg); border-radius: var(--r); padding: 0.5rem 0.5rem 0.5rem 1rem; display: flex; align-items: center; gap: 0.75rem; font-weight: 700; }
+.toast > span { flex: 1; min-width: 0; }
+.toast .btn { min-height: var(--tap); white-space: nowrap; flex: none; border-color: var(--bg); background: var(--ink); color: var(--bg); }
 
 .badge-line { display: flex; gap: 0.4rem; align-items: center; font-size: var(--fs-xs); font-weight: 700; }
 .hide-sm { display: inline; }
@@ -164,7 +187,7 @@ table.t tr.on td:first-child { background: linear-gradient(transparent 62%, var(
 <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>
 <script id="builtin-table" type="application/json">{"format": "dive-table/1", "name": "NAUI ダイブテーブル", "version": "2022年版", "verified": true, "verifiedBy": "潜水隊（2名で現物と照合）", "updatedAt": "2026-10-24", "source": "NAUI ダイブテーブル（日本語版カード、©2022 NAUI）の写真から書き起こし。", "notes": ["2026年10月24日、隊内2名で現物カードと1マスずつ照合済み。", "6mより浅い潜水は6mとして計算します。", "30mを超える反復潜水は避けるよう表に記載があります。"], "rules": {"minSurfaceInterval": 10, "clearAfterMinutes": 1440, "avoidRepetitiveDeeperThan": 30, "safetyStopDepth": 5, "safetyStopMinutes": 3, "maxAscentRate": 9}, "depths": [6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 40], "mdt": {"6": 461, "9": 223, "12": 130, "15": 75, "18": 50, "21": 40, "24": 30, "27": 25, "30": 20, "33": 15, "36": 12, "40": 8}, "groups": {"6": [[26, "A"], [43, "B"], [61, "C"], [82, "D"], [106, "E"], [133, "F"], [165, "G"], [205, "H"], [256, "I"], [330, "J"], [461, "K"]], "9": [[17, "A"], [27, "B"], [38, "C"], [50, "D"], [62, "E"], [76, "F"], [91, "G"], [107, "H"], [125, "I"], [145, "J"], [167, "K"], [193, "L"], [223, "M"], [260, "N"]], "12": [[12, "A"], [20, "B"], [27, "C"], [36, "D"], [44, "E"], [53, "F"], [63, "G"], [73, "H"], [84, "I"], [95, "J"], [108, "K"], [121, "L"], [130, "M"], [140, "N"]], "15": [[9, "A"], [15, "B"], [21, "C"], [28, "D"], [34, "E"], [41, "F"], [48, "G"], [56, "H"], [63, "I"], [71, "J"], [75, "K"], [80, "M"]], "18": [[7, "A"], [12, "B"], [17, "C"], [22, "D"], [28, "E"], [33, "F"], [39, "G"], [45, "H"], [50, "I"], [55, "L"]], "21": [[6, "A"], [10, "B"], [14, "C"], [19, "D"], [23, "E"], [28, "F"], [32, "G"], [37, "H"], [40, "I"], [48, "K"]], "24": [[5, "A"], [9, "B"], [12, "C"], [16, "D"], [20, "E"], [24, "F"], [28, "G"], [30, "H"], [35, "J"]], "27": [[4, "A"], [7, "B"], [11, "C"], [14, "D"], [17, "E"], [21, "F"], [24, "G"], [25, "H"], [30, "J"]], "30": [[4, "A"], [6, "B"], [9, "C"], [12, "D"], [15, "E"], [18, "F"], [20, "G"], [25, "J"]], "33": [[3, "A"], [6, "B"], [8, "C"], [11, "D"], [14, "E"], [15, "F"], [20, "I"]], "36": [[3, "A"], [5, "B"], [7, "C"], [10, "D"], [12, "E"], [15, "H"]], "40": [[2, "A"], [4, "B"], [6, "C"], [8, "D"], [10, "G"]]}, "rnt": {"A": {"6": 27, "9": 18, "12": 13, "15": 11, "18": 9, "21": 8, "24": 7, "27": 6, "30": 5, "33": 5, "36": 5, "40": 4}, "B": {"6": 44, "9": 28, "12": 21, "15": 17, "18": 14, "21": 12, "24": 10, "27": 9, "30": 8, "33": 8, "36": 7, "40": 6}, "C": {"6": 62, "9": 39, "12": 29, "15": 23, "18": 19, "21": 16, "24": 14, "27": 12, "30": 11, "33": 10, "36": 9, "40": 8}, "D": {"6": 83, "9": 51, "12": 37, "15": 29, "18": 24, "21": 20, "24": 18, "27": 16, "30": 14, "33": 13, "36": 12}, "E": {"6": 106, "9": 63, "12": 45, "15": 35, "18": 29, "21": 25, "24": 22, "27": 19, "30": 17, "33": 15}, "F": {"6": 134, "9": 77, "12": 55, "15": 42, "18": 35, "21": 29, "24": 25, "27": 22, "30": 20}, "G": {"6": 166, "9": 92, "12": 64, "15": 49, "18": 40, "21": 34, "24": 29, "27": 25}, "H": {"6": 206, "9": 108, "12": 74, "15": 57, "18": 46, "21": 39, "24": 30}, "I": {"6": 257, "9": 126, "12": 85, "15": 65, "18": 50, "21": 40}, "J": {"6": 331, "9": 146, "12": 97, "15": 73}, "K": {"6": 461, "9": 168, "12": 109, "15": 75}, "L": {"9": 194, "12": 122}, "M": {"9": 223, "12": 130}}, "amdt": {"A": {"6": 434, "9": 205, "12": 117, "15": 64, "18": 41, "21": 32, "24": 23, "27": 19, "30": 15, "33": 10, "36": 7, "40": 4}, "B": {"6": 417, "9": 195, "12": 109, "15": 58, "18": 36, "21": 28, "24": 20, "27": 16, "30": 12, "33": 7, "36": 5, "40": 2}, "C": {"6": 399, "9": 184, "12": 101, "15": 52, "18": 31, "21": 24, "24": 16, "27": 13, "30": 9, "33": 5, "36": 3, "40": 0}, "D": {"6": 378, "9": 172, "12": 93, "15": 46, "18": 26, "21": 20, "24": 12, "27": 9, "30": 6, "33": 2, "36": 0}, "E": {"6": 355, "9": 160, "12": 85, "15": 40, "18": 21, "21": 15, "24": 8, "27": 6, "30": 3, "33": 0}, "F": {"6": 327, "9": 146, "12": 75, "15": 33, "18": 15, "21": 11, "24": 5, "27": 3, "30": 0}, "G": {"6": 295, "9": 131, "12": 66, "15": 26, "18": 10, "21": 6, "24": 1, "27": 0}, "H": {"6": 255, "9": 115, "12": 56, "15": 18, "18": 4, "21": 1, "24": 0}, "I": {"6": 204, "9": 97, "12": 45, "15": 10, "18": 0, "21": 0}, "J": {"6": 130, "9": 77, "12": 33, "15": 2}, "K": {"6": 0, "9": 55, "12": 21, "15": 0}, "L": {"9": 29, "12": 8}, "M": {"9": 0, "12": 0}}, "surfaceInterval": {"A": [[10, 1440, "A"]], "B": [[10, 76, "B"], [77, 1440, "A"]], "C": [[10, 55, "C"], [56, 131, "B"], [132, 1440, "A"]], "D": [[10, 52, "D"], [53, 107, "C"], [108, 183, "B"], [184, 1440, "A"]], "E": [[10, 52, "E"], [53, 104, "D"], [105, 159, "C"], [160, 235, "B"], [236, 1440, "A"]], "F": [[10, 52, "F"], [53, 104, "E"], [105, 157, "D"], [158, 211, "C"], [212, 288, "B"], [289, 1440, "A"]], "G": [[10, 52, "G"], [53, 104, "F"], [105, 157, "E"], [158, 209, "D"], [210, 263, "C"], [264, 340, "B"], [341, 1440, "A"]], "H": [[10, 52, "H"], [53, 104, "G"], [105, 157, "F"], [158, 209, "E"], [210, 261, "D"], [262, 316, "C"], [317, 392, "B"], [393, 1440, "A"]], "I": [[10, 52, "I"], [53, 104, "H"], [105, 157, "G"], [158, 209, "F"], [210, 261, "E"], [262, 313, "D"], [314, 368, "C"], [369, 444, "B"], [445, 1440, "A"]], "J": [[10, 52, "J"], [53, 104, "I"], [105, 157, "H"], [158, 209, "G"], [210, 261, "F"], [262, 313, "E"], [314, 366, "D"], [367, 420, "C"], [421, 496, "B"], [497, 1440, "A"]], "K": [[10, 52, "K"], [53, 104, "J"], [105, 157, "I"], [158, 209, "H"], [210, 261, "G"], [262, 313, "F"], [314, 366, "E"], [367, 418, "D"], [419, 472, "C"], [473, 549, "B"], [550, 1440, "A"]], "L": [[10, 52, "L"], [53, 104, "K"], [105, 157, "J"], [158, 209, "I"], [210, 261, "H"], [262, 313, "G"], [314, 366, "F"], [367, 418, "E"], [419, 470, "D"], [471, 524, "C"], [525, 601, "B"], [602, 1440, "A"]], "M": [[10, 52, "M"], [53, 104, "L"], [105, 157, "K"], [158, 209, "J"], [210, 261, "I"], [262, 313, "H"], [314, 366, "G"], [367, 418, "F"], [419, 470, "E"], [471, 522, "D"], [523, 577, "C"], [578, 653, "B"], [654, 1440, "A"]], "N": [[10, 52, "N"], [53, 104, "M"], [105, 157, "L"], [158, 209, "K"], [210, 261, "J"], [262, 313, "I"], [314, 366, "H"], [367, 418, "G"], [419, 470, "F"], [471, 522, "E"], [523, 574, "D"], [575, 629, "C"], [630, 705, "B"], [706, 1440, "A"]]}, "deco": {"9-N": {"limit": 260, "stop5": 5}, "12-N": {"limit": 140, "stop5": 6}, "15-M": {"limit": 80, "stop5": 2}, "18-L": {"limit": 55, "stop5": 2}, "21-K": {"limit": 48, "stop5": 2}, "24-J": {"limit": 35, "stop5": 1}, "27-J": {"limit": 30, "stop5": 5}, "30-J": {"limit": 25, "stop5": 5}, "33-I": {"limit": 20, "stop5": 5}, "36-H": {"limit": 15, "stop5": 5}, "40-G": {"limit": 10, "stop5": 5}}}</script>
 <script>
-const ICONS = {"plus": "<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />", "arrow-down-to-line": "<path d=\"M12 17V3\" /> <path d=\"m6 11 6 6 6-6\" /> <path d=\"M19 21H5\" />", "arrow-up-from-line": "<path d=\"m18 9-6-6-6 6\" /> <path d=\"M12 3v14\" /> <path d=\"M5 21h14\" />", "timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /> <line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /> <circle cx=\"12\" cy=\"14\" r=\"8\" />", "users": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /> <circle cx=\"9\" cy=\"7\" r=\"4\" /> <path d=\"M22 21v-2a4 4 0 0 0-3-3.87\" /> <path d=\"M16 3.13a4 4 0 0 1 0 7.75\" />", "user-plus": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /> <circle cx=\"9\" cy=\"7\" r=\"4\" /> <line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\" /> <line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\" />", "waves": "<path d=\"M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" /> <path d=\"M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" /> <path d=\"M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" />", "share-2": "<circle cx=\"18\" cy=\"5\" r=\"3\" /> <circle cx=\"6\" cy=\"12\" r=\"3\" /> <circle cx=\"18\" cy=\"19\" r=\"3\" /> <line x1=\"8.59\" x2=\"15.42\" y1=\"13.51\" y2=\"17.49\" /> <line x1=\"15.41\" x2=\"8.59\" y1=\"6.51\" y2=\"10.49\" />", "download": "<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" /> <polyline points=\"7 10 12 15 17 10\" /> <line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\" />", "upload": "<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" /> <polyline points=\"17 8 12 3 7 8\" /> <line x1=\"12\" x2=\"12\" y1=\"3\" y2=\"15\" />", "undo-2": "<path d=\"M9 14 4 9l5-5\" /> <path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" />", "settings": "<path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />", "table-2": "<path d=\"M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18\" />", "chevron-left": "<path d=\"m15 18-6-6 6-6\" />", "chevron-right": "<path d=\"m9 18 6-6-6-6\" />", "check": "<path d=\"M20 6 9 17l-5-5\" />", "triangle-alert": "<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /> <path d=\"M12 9v4\" /> <path d=\"M12 17h.01\" />", "x": "<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />", "trash-2": "<path d=\"M3 6h18\" /> <path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /> <path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /> <line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /> <line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />", "file-text": "<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\" /> <path d=\"M14 2v4a2 2 0 0 0 2 2h4\" /> <path d=\"M10 9H8\" /> <path d=\"M16 13H8\" /> <path d=\"M16 17H8\" />", "calculator": "<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" /> <line x1=\"8\" x2=\"16\" y1=\"6\" y2=\"6\" /> <line x1=\"16\" x2=\"16\" y1=\"14\" y2=\"18\" /> <path d=\"M16 10h.01\" /> <path d=\"M12 10h.01\" /> <path d=\"M8 10h.01\" /> <path d=\"M12 14h.01\" /> <path d=\"M8 14h.01\" /> <path d=\"M12 18h.01\" /> <path d=\"M8 18h.01\" />", "clock": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <polyline points=\"12 6 12 12 16 14\" />", "pencil": "<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /> <path d=\"m15 5 4 4\" />", "rotate-ccw": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" />", "flag": "<path d=\"M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z\" /> <line x1=\"4\" x2=\"4\" y1=\"22\" y2=\"15\" />", "info": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"M12 16v-4\" /> <path d=\"M12 8h.01\" />", "copy": "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /> <path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />", "circle-check": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"m9 12 2 2 4-4\" />", "circle-alert": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <line x1=\"12\" x2=\"12\" y1=\"8\" y2=\"12\" /> <line x1=\"12\" x2=\"12.01\" y1=\"16\" y2=\"16\" />", "play": "<polygon points=\"6 3 20 12 6 21 6 3\" />", "list": "<path d=\"M3 12h.01\" /> <path d=\"M3 18h.01\" /> <path d=\"M3 6h.01\" /> <path d=\"M8 12h13\" /> <path d=\"M8 18h13\" /> <path d=\"M8 6h13\" />", "moon": "<path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\" />", "sun": "<circle cx=\"12\" cy=\"12\" r=\"4\" /> <path d=\"M12 2v2\" /> <path d=\"M12 20v2\" /> <path d=\"m4.93 4.93 1.41 1.41\" /> <path d=\"m17.66 17.66 1.41 1.41\" /> <path d=\"M2 12h2\" /> <path d=\"M20 12h2\" /> <path d=\"m6.34 17.66-1.41 1.41\" /> <path d=\"m19.07 4.93-1.41 1.41\" />", "ellipsis": "<circle cx=\"12\" cy=\"12\" r=\"1\" /> <circle cx=\"19\" cy=\"12\" r=\"1\" /> <circle cx=\"5\" cy=\"12\" r=\"1\" />", "anchor": "<path d=\"M12 22V8\" /> <path d=\"M5 12H2a10 10 0 0 0 20 0h-3\" /> <circle cx=\"12\" cy=\"5\" r=\"3\" />", "mail": "<rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\" /> <path d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\" />", "shield-check": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" /> <path d=\"m9 12 2 2 4-4\" />"};
+const ICONS = {"plus": "<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />", "arrow-down-to-line": "<path d=\"M12 17V3\" /> <path d=\"m6 11 6 6 6-6\" /> <path d=\"M19 21H5\" />", "arrow-up-from-line": "<path d=\"m18 9-6-6-6 6\" /> <path d=\"M12 3v14\" /> <path d=\"M5 21h14\" />", "timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /> <line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /> <circle cx=\"12\" cy=\"14\" r=\"8\" />", "users": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /> <circle cx=\"9\" cy=\"7\" r=\"4\" /> <path d=\"M22 21v-2a4 4 0 0 0-3-3.87\" /> <path d=\"M16 3.13a4 4 0 0 1 0 7.75\" />", "user-plus": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /> <circle cx=\"9\" cy=\"7\" r=\"4\" /> <line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\" /> <line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\" />", "waves": "<path d=\"M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" /> <path d=\"M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" /> <path d=\"M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" />", "share-2": "<circle cx=\"18\" cy=\"5\" r=\"3\" /> <circle cx=\"6\" cy=\"12\" r=\"3\" /> <circle cx=\"18\" cy=\"19\" r=\"3\" /> <line x1=\"8.59\" x2=\"15.42\" y1=\"13.51\" y2=\"17.49\" /> <line x1=\"15.41\" x2=\"8.59\" y1=\"6.51\" y2=\"10.49\" />", "download": "<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" /> <polyline points=\"7 10 12 15 17 10\" /> <line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\" />", "upload": "<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" /> <polyline points=\"17 8 12 3 7 8\" /> <line x1=\"12\" x2=\"12\" y1=\"3\" y2=\"15\" />", "undo-2": "<path d=\"M9 14 4 9l5-5\" /> <path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" />", "settings": "<path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />", "table-2": "<path d=\"M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18\" />", "chevron-left": "<path d=\"m15 18-6-6 6-6\" />", "chevron-right": "<path d=\"m9 18 6-6-6-6\" />", "check": "<path d=\"M20 6 9 17l-5-5\" />", "triangle-alert": "<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /> <path d=\"M12 9v4\" /> <path d=\"M12 17h.01\" />", "x": "<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />", "trash-2": "<path d=\"M3 6h18\" /> <path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /> <path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /> <line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /> <line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />", "file-text": "<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\" /> <path d=\"M14 2v4a2 2 0 0 0 2 2h4\" /> <path d=\"M10 9H8\" /> <path d=\"M16 13H8\" /> <path d=\"M16 17H8\" />", "calculator": "<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" /> <line x1=\"8\" x2=\"16\" y1=\"6\" y2=\"6\" /> <line x1=\"16\" x2=\"16\" y1=\"14\" y2=\"18\" /> <path d=\"M16 10h.01\" /> <path d=\"M12 10h.01\" /> <path d=\"M8 10h.01\" /> <path d=\"M12 14h.01\" /> <path d=\"M8 14h.01\" /> <path d=\"M12 18h.01\" /> <path d=\"M8 18h.01\" />", "clock": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <polyline points=\"12 6 12 12 16 14\" />", "pencil": "<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /> <path d=\"m15 5 4 4\" />", "rotate-ccw": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" />", "flag": "<path d=\"M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z\" /> <line x1=\"4\" x2=\"4\" y1=\"22\" y2=\"15\" />", "info": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"M12 16v-4\" /> <path d=\"M12 8h.01\" />", "copy": "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /> <path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />", "circle-check": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"m9 12 2 2 4-4\" />", "circle-alert": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <line x1=\"12\" x2=\"12\" y1=\"8\" y2=\"12\" /> <line x1=\"12\" x2=\"12.01\" y1=\"16\" y2=\"16\" />", "play": "<polygon points=\"6 3 20 12 6 21 6 3\" />", "list": "<path d=\"M3 12h.01\" /> <path d=\"M3 18h.01\" /> <path d=\"M3 6h.01\" /> <path d=\"M8 12h13\" /> <path d=\"M8 18h13\" /> <path d=\"M8 6h13\" />", "moon": "<path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\" />", "sun": "<circle cx=\"12\" cy=\"12\" r=\"4\" /> <path d=\"M12 2v2\" /> <path d=\"M12 20v2\" /> <path d=\"m4.93 4.93 1.41 1.41\" /> <path d=\"m17.66 17.66 1.41 1.41\" /> <path d=\"M2 12h2\" /> <path d=\"M20 12h2\" /> <path d=\"m6.34 17.66-1.41 1.41\" /> <path d=\"m19.07 4.93-1.41 1.41\" />", "ellipsis": "<circle cx=\"12\" cy=\"12\" r=\"1\" /> <circle cx=\"19\" cy=\"12\" r=\"1\" /> <circle cx=\"5\" cy=\"12\" r=\"1\" />", "anchor": "<path d=\"M12 22V8\" /> <path d=\"M5 12H2a10 10 0 0 0 20 0h-3\" /> <circle cx=\"12\" cy=\"5\" r=\"3\" />", "mail": "<rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\" /> <path d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\" />", "shield-check": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" /> <path d=\"m9 12 2 2 4-4\" />", "arrow-up": "<path d=\"m5 12 7-7 7 7\" /> <path d=\"M12 19V5\" />", "hard-drive-download": "<path d=\"M12 2v8\" /> <path d=\"m16 6-4 4-4-4\" /> <rect width=\"20\" height=\"8\" x=\"2\" y=\"14\" rx=\"2\" /> <path d=\"M6 18h.01\" /> <path d=\"M10 18h.01\" />", "send": "<path d=\"M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z\" /> <path d=\"m21.854 2.147-10.94 10.939\" />", "history": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" /> <path d=\"M12 7v5l4 2\" />"};
 
 /* ===== 計算エンジン（潜水表の数値には依存しない。表はデータとして受け取る） ===== */
 const Engine = (() => {
@@ -227,14 +250,25 @@ const Engine = (() => {
    */
   function computeDive(table, prev, dive, opts = {}) {
     const r = { warnings: [], status: 'ok', stop5: null, incoming: null, siMin: null, continued: false };
-    const adt = dive.adt === '' || dive.adt == null ? null : Number(dive.adt);
-    let td = tableDepthFor(table, dive.maxDepth);
+    let adt = dive.adt === '' || dive.adt == null ? null : Number(dive.adt);
+    const depthIn = dive.maxDepth === '' || dive.maxDepth == null ? null : Number(dive.maxDepth);
+    // 数字でない・0以下の値は判定しない（甘い判定を出さないため）
+    if (adt != null && !(isFinite(adt) && adt > 0)) {
+      r.warnings.push({ level: 'stop', text: '潜水時間は1分以上の数字で入れてください。' });
+      adt = null;
+    }
+    if (depthIn != null && !(isFinite(depthIn) && depthIn > 0)) {
+      r.warnings.push({ level: 'stop', text: '最大水深は0より大きい数字で入れてください。' });
+      r.status = 'na'; r.tableDepth = null;
+      return r;
+    }
+    let td = tableDepthFor(table, depthIn);
     let first = !prev || dive.treatAsFirst;
     let noAmdt = false;
 
-    if (dive.maxDepth != null && dive.maxDepth !== '' && td == null) {
+    if (depthIn != null && td == null) {
       r.status = 'out';
-      r.warnings.push({ level: 'stop', text: `最大水深 ${dive.maxDepth}m は表の範囲（${table.depths[table.depths.length - 1]}mまで）を超えています。` });
+      r.warnings.push({ level: 'stop', text: `最大水深 ${depthIn}m は表の範囲（${table.depths[table.depths.length - 1]}mまで）を超えています。` });
     }
     if (adt == null || td == null) {
       if (r.status === 'ok') r.status = 'na';
@@ -247,7 +281,7 @@ const Engine = (() => {
       rnt = 0;
     } else {
       r.siMin = prev.endAt && dive.startAt ? (new Date(dive.startAt) - new Date(prev.endAt)) / 60000 : null;
-      let si = r.siMin == null ? { status: 'unknown' } : (prev.group ? siGroup(table, prev.group, r.siMin) : { status: 'noprev' });
+      let si = r.siMin == null || isNaN(r.siMin) ? { status: 'unknown' } : r.siMin < 0 ? { status: 'negative' } : (prev.group ? siGroup(table, prev.group, r.siMin) : { status: 'noprev' });
       const clear = table.rules?.clearAfterMinutes;
       if (clear && r.siMin != null && r.siMin > clear) {
         first = true; si = { status: 'cleared' };
@@ -277,7 +311,8 @@ const Engine = (() => {
           over: `水面休息が表の範囲（${si.maxHi}分まで）を超えました。1本目として扱うかは指揮者が判断してください。`,
           gap: '水面休息表に該当する時間帯がありません。表を確認してください。',
           noprev: '前の潜水のグループが出ていないため、自動計算できません。',
-          unknown: '前の潜水の時刻が分からないため、水面休息を計算できません。'
+          unknown: '前の潜水の時刻が分からないため、水面休息を計算できません。',
+          negative: 'この潜水の潜降時刻が、前の潜水の浮上時刻より前になっています。時刻を直してください。'
         }[si.status];
         r.warnings.push({ level: 'stop', text: msg, canReset: si.status === 'over' });
       }
@@ -287,7 +322,9 @@ const Engine = (() => {
     r.mdt = table.mdt[String(td)] ?? null;
     const avoid = table.rules?.avoidRepetitiveDeeperThan;
     if (!first && avoid && td > avoid) r.warnings.push({ level: 'warn', text: `${avoid}mより深い反復潜水は避けるよう、潜水表に記載があります。` });
-    r.amdt = first ? r.mdt : (r.continued ? (r.mdt != null ? r.mdt - rnt : null) : amdt);
+    if (!first && (prev.status === 'deco' || prev.status === 'out')) r.warnings.push({ level: 'warn', text: '減圧停止が必要だった（または表の範囲外の）潜水の後の反復潜水です。指揮者が判断してください。' });
+    if (!first && !r.continued && prev.tableDepth != null && td > prev.tableDepth) r.warnings.push({ level: 'warn', text: `前の潜水（${prev.tableDepth}m）より深い反復潜水です。深い潜水を先にするのが原則です。` });
+    r.amdt = first ? r.mdt : (r.continued ? (r.mdt != null ? Math.max(0, r.mdt - rnt) : null) : amdt);
     if (r.status === 'out') { r.rnt = rnt; return r; }
 
     r.rnt = rnt;
@@ -305,6 +342,12 @@ const Engine = (() => {
       r.status = 'deco';
       r.stop5 = deco.stop5;
       r.warnings.push({ level: 'stop', text: `減圧停止が必要です。水深5mで${deco.stop5}分止まってください（合計窒素時間 ${r.tnt}分・グループ${g}）。` });
+      // 実際に止まった時間が足りないときは、次の潜水を計算しない（24時間は潜らない扱い）
+      const done = dive.decoStopDone == null || dive.decoStopDone === '' ? null : Number(dive.decoStopDone);
+      if (done != null && !(done >= deco.stop5)) {
+        r.omitted = true; r.group = null;
+        r.warnings.push({ level: 'stop', text: `減圧停止が足りません（必要 ${deco.stop5}分・実際 ${isFinite(done) ? done : '—'}分）。24時間は潜らず、体調を観察してください。次の潜水は計算しません。` });
+      }
       if (r.tnt > deco.limit) {
         r.status = 'out';
         r.warnings.push({ level: 'stop', text: `合計窒素時間 ${r.tnt}分 は減圧停止表の上限 ${deco.limit}分 を超えています。表では判断できません。` });
@@ -323,11 +366,23 @@ const Engine = (() => {
     return r;
   }
 
+  // 1段階厳しくしても減圧停止にならない、合計窒素時間の上限
+  function strictTntCap(table, depth) {
+    const cuts = table.groups[String(depth)] || [], mdt = table.mdt[String(depth)] ?? 0;
+    let cap = 0;
+    for (const [mx, g] of cuts) {
+      const s = stricterGroup(table, depth, g);
+      if (mx <= mdt && s && !table.deco[`${depth}-${s}`]) cap = mx;
+    }
+    return cap;
+  }
+
   // ある時刻に潜り始めた場合、水深ごとに何分潜れるか
   function allowance(table, prev, atTime, opts = {}) {
     let incoming = null, first = !prev, note = null, siMin = null;
     if (prev && !opts.forceFirst) {
-      siMin = (new Date(atTime) - new Date(prev.endAt)) / 60000;
+      siMin = prev.endAt ? (new Date(atTime) - new Date(prev.endAt)) / 60000 : NaN;
+      if (!(siMin >= 0)) return { ok: false, siMin, note: '前の潜水の浮上時刻が分からないか、時刻の順番が合いません。' };
       const clear = table.rules?.clearAfterMinutes;
       if (clear && siMin > clear) { first = true; note = `水面休息が${Math.round(clear / 60)}時間を超えたため、1本目として計算しています。`; }
       else {
@@ -341,10 +396,18 @@ const Engine = (() => {
     } else if (prev && opts.forceFirst) { first = true; }
     const avoid = table.rules?.avoidRepetitiveDeeperThan;
     const rows = table.depths.map(d => {
-      if (first) return { depth: d, limit: table.mdt[String(d)] ?? null, rnt: 0 };
-      const rnt = val(table.rnt, incoming, d), am = val(table.amdt, incoming, d);
-      const avoidHere = !!(avoid && d > avoid);
-      return { depth: d, limit: rnt == null ? 0 : (am ?? 0), rnt, noData: rnt == null || am == null, avoid: avoidHere };
+      let row;
+      if (first) row = { depth: d, limit: table.mdt[String(d)] ?? null, rnt: 0 };
+      else {
+        const rnt = val(table.rnt, incoming, d), am = val(table.amdt, incoming, d);
+        row = { depth: d, limit: rnt == null ? 0 : (am ?? 0), rnt, noData: rnt == null || am == null, avoid: !!(avoid && d > avoid) };
+      }
+      if (opts.strict && row.limit) {
+        // 1段階厳しくしたとき：浮上後のグループが減圧の側に入らない合計窒素時間まで
+        const cap = strictTntCap(table, d);
+        row.limit = Math.max(0, Math.min(row.limit, cap - (row.rnt || 0)));
+      }
+      return row;
     });
     return { ok: true, first, incoming, siMin, rows, note };
   }
@@ -357,6 +420,15 @@ const Engine = (() => {
     if (t.format !== 'dive-table/1') errors.push('形式の印（format: dive-table/1）がありません。');
     if (!t.name || !t.version) errors.push('表の名前（name）と版（version）が必要です。');
     if (!Array.isArray(t.depths) || !t.depths.length) { errors.push('水深の一覧（depths）がありません。'); return { errors, warnings }; }
+    if (!t.depths.every(d => isNum(d) && d > 0)) { errors.push('水深の一覧（depths）に数字でない値があります。'); return { errors, warnings }; }
+    // 決まりごと（rules）：甘い判定になる値は受け付けない
+    const R = t.rules;
+    if (!R || typeof R !== 'object') errors.push('決まりごと（rules）がありません。');
+    else {
+      const need = { minSurfaceInterval: [10, 60], clearAfterMinutes: [1440, 2880], safetyStopMinutes: [3, 5], safetyStopDepth: [3, 6], maxAscentRate: [1, 18] };
+      for (const [k, [lo, hi]] of Object.entries(need)) if (!isNum(R[k]) || R[k] < lo || R[k] > hi) errors.push(`決まりごと「${k}」は ${lo}〜${hi} の数字にしてください（今は ${R[k] ?? 'なし'}）。`);
+      if (R.avoidRepetitiveDeeperThan != null && !isNum(R.avoidRepetitiveDeeperThan)) errors.push('決まりごと「avoidRepetitiveDeeperThan」が数字ではありません。');
+    }
     for (let i = 1; i < t.depths.length; i++) if (!(t.depths[i] > t.depths[i - 1])) errors.push(`水深の並びが浅い順になっていません（${t.depths[i - 1]}m → ${t.depths[i]}m）。`);
     for (const k of ['mdt', 'groups', 'rnt', 'amdt', 'surfaceInterval', 'deco']) if (!t[k] || typeof t[k] !== 'object') errors.push(`「${k}」の表がありません。`);
     if (errors.length) return { errors, warnings };
@@ -427,6 +499,9 @@ const Engine = (() => {
     const out = [];
     const cmp = (label, x, y) => { if (JSON.stringify(x) !== JSON.stringify(y)) out.push({ label, from: x ?? '—', to: y ?? '—' }); };
     if (!a) return out;
+    const rk = [...new Set([...Object.keys(a.rules || {}), ...Object.keys(b.rules || {})])].sort();
+    for (const k of rk) cmp(`決まりごと ${k}`, a.rules?.[k], b.rules?.[k]);
+    cmp('照合', a.verified ? `済み（${a.verifiedBy || ''}）` : '前', b.verified ? `済み（${b.verifiedBy || ''}）` : '前');
     const depths = [...new Set([...(a.depths || []), ...(b.depths || [])])].sort((x, y) => x - y);
     for (const d of depths) cmp(`最大潜水時間 ${d}m`, a.mdt?.[d], b.mdt?.[d]);
     for (const d of depths) cmp(`グループ表 ${d}m`, (a.groups?.[d] || []).map(c => c.join('')).join(' '), (b.groups?.[d] || []).map(c => c.join('')).join(' '));
@@ -441,7 +516,7 @@ const Engine = (() => {
     return out;
   }
 
-  return { tableDepthFor, groupFor, siGroup, airMinutes, computeDive, allowance, validate, diff };
+  return { tableDepthFor, groupFor, siGroup, airMinutes, computeDive, allowance, strictTntCap, validate, diff };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
 
@@ -451,7 +526,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
 const BUILTIN_TABLE = JSON.parse(document.getElementById('builtin-table').textContent);
 const BUILTIN_ID = 'builtin:' + BUILTIN_TABLE.version;
 const LS_KEY = 'diveops.v1';
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.3.0';
 const TZ = 'Asia/Tokyo';
 const TYPES = ['災害', '訓練', '研修', 'その他'];
 
@@ -465,8 +540,12 @@ const fmtParts = (d, o) => new Intl.DateTimeFormat('ja-JP', { timeZone: TZ, ...o
 const ymd = d => { const p = fmtParts(d, { year: 'numeric', month: '2-digit', day: '2-digit' }); return `${p.year}/${p.month}/${p.day}`; };
 const ymdCompact = d => ymd(d).replaceAll('/', '');
 const hm = d => { if (!d) return '—'; const p = fmtParts(d, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }); return `${p.hour}:${p.minute}`; };
+const hms = d => { const p = fmtParts(d, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }); return `${p.hour}:${p.minute}:${p.second}`; };
 const md = d => { const p = fmtParts(d, { month: 'numeric', day: 'numeric', weekday: 'short' }); return `${p.month}/${p.day}（${p.weekday}）`; };
 const minsBetween = (a, b) => (new Date(b) - new Date(a)) / 60000;
+// 全角の数字・記号を半角に。数字として読めなければ NaN（空なら ''）
+const toHalf = v => String(v ?? '').replace(/[０-９．－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[ー−]/g, '-').trim();
+const numOrBlank = v => { const s = toHalf(v).replace(/[^\d.\-]/g, ''); return toHalf(v) === '' ? '' : (s === '' || isNaN(Number(s)) ? NaN : Number(s)); };
 function clockText(ms) {
   if (ms < 0) ms = 0;
   const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
@@ -484,21 +563,21 @@ function isoFromHM(baseISO, hhmm) {
 /* ---------- 保存 ---------- */
 function sampleState() {
   const members = [
-    { id: '1001', name: '見本 一郎', sample: true },
-    { id: '1002', name: '見本 二郎', sample: true },
-    { id: '1003', name: '見本 三郎', sample: true },
-    { id: '1004', name: '見本 四郎', sample: true }
+    { id: 'S01', name: '見本 一郎', sample: true },
+    { id: 'S02', name: '見本 二郎', sample: true },
+    { id: 'S03', name: '見本 三郎', sample: true },
+    { id: 'S04', name: '見本 四郎', sample: true }
   ];
   const base = new Date(Date.now() - 3 * 86400000);
   const at = (h, m) => isoFromHM(base.toISOString(), `${h}:${String(m).padStart(2, '0')}`);
   const inc = {
-    id: uid(), sample: true, createdAt: at(9, 0), type: '訓練', title: '定期潜水訓練（見本）', site: '佐良浜漁港', commanderId: '1001',
+    id: uid(), sample: true, createdAt: at(9, 0), type: '訓練', title: '定期潜水訓練（見本）', site: '佐良浜漁港', commanderId: 'S01',
     memo: '', waterTemp: '26', visibility: '12', sea: '凪', strict: false, status: 'closed', closedAt: at(12, 0), tableId: BUILTIN_ID,
     divers: [
-      { memberId: '1002', tank: 10, sac: 20, current: null, nextFirst: false, dives: [
+      { memberId: 'S02', tank: 10, sac: 20, current: null, nextFirst: false, dives: [
         { id: uid(), startAt: at(9, 20), endAt: at(10, 0), plannedDepth: 15, startP: 200, endP: 80, maxDepth: 14, adt: 37, safetyStop: true, condition: '無', note: '' },
         { id: uid(), startAt: at(11, 10), endAt: at(11, 38), plannedDepth: 12, startP: 200, endP: 110, maxDepth: 11, adt: 25, safetyStop: true, condition: '無', note: '' }] },
-      { memberId: '1003', tank: 10, sac: 20, current: null, nextFirst: false, dives: [
+      { memberId: 'S03', tank: 10, sac: 20, current: null, nextFirst: false, dives: [
         { id: uid(), startAt: at(9, 20), endAt: at(9, 58), plannedDepth: 15, startP: 200, endP: 70, maxDepth: 15, adt: 35, safetyStop: true, condition: '無', note: '' }] }
     ]
   };
@@ -510,35 +589,48 @@ function sampleState() {
     incidents: [inc]
   };
 }
+let loadNote = '';
 function load() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) { const s = JSON.parse(raw); if (s && s.v === 1) return s; }
-  } catch (e) { /* 保存領域が使えない環境 */ }
-  return sampleState();
+  let raw = null;
+  try { raw = localStorage.getItem(LS_KEY); } catch (e) { return sampleState(); }
+  if (!raw) return sampleState();
+  try { const s = JSON.parse(raw); if (s && s.v === 1 && Array.isArray(s.incidents)) return s; } catch (e) {}
+  // 壊れた記録は消さずに別の場所へ退避してから始める
+  try { localStorage.setItem(LS_KEY + '.broken.' + Date.now(), raw); } catch (e) {}
+  loadNote = '前回の記録を読み込めませんでした。読めなかったデータは端末内に退避してあります。';
+  return { ...sampleState(), members: [], incidents: [] };
 }
 let S = load();
+S.settings = { lastBackup: null, ...S.settings };
 let storageOK = true;
 function save() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(S)); storageOK = true; }
   catch (e) { storageOK = false; }
+  return storageOK;
 }
-try { navigator.storage?.persist?.(); } catch (e) {}
+let persisted = null;
+try { navigator.storage?.persist?.().then(v => { persisted = v; }).catch(() => {}); } catch (e) {}
 
 /* ---------- 潜水表 ---------- */
 function allTables() { return [{ id: BUILTIN_ID, builtin: true, importedAt: null, data: BUILTIN_TABLE }, ...S.tables.list]; }
 function tableById(id) { return allTables().find(t => t.id === id) || null; }
 function activeTable() { return tableById(S.tables.activeId) || tableById(BUILTIN_ID); }
 function tableLabel(t) { return t ? `${t.data.name}・${t.data.version}` : '—'; }
-function incidentTable(inc) { return tableById(inc.tableId) || activeTable(); }
+// 事案は始めたときの表で計算する（アプリの更新で内蔵表が変わっても、写しで計算を続ける）
+function incidentTable(inc) {
+  return tableById(inc.tableId) || (inc.tableSnap ? { id: inc.tableId, data: inc.tableSnap, snap: true } : { ...activeTable(), missing: true });
+}
 
 /* ---------- 計算 ---------- */
 const member = id => S.members.find(m => m.id === id) || { id, name: `職員番号 ${id}` };
+// 削除した潜水は計算から外す（本数は振り直さない）
+const liveDives = dv => dv.dives.filter(d => !d.deleted);
 function diverResults(inc, dv) {
   const t = incidentTable(inc).data;
   const out = [];
   let prev = null;
   dv.dives.forEach((d, i) => {
+    if (d.deleted) { out.push({ deleted: true, no: i + 1, warnings: [], status: 'na' }); return; }
     const r = Engine.computeDive(t, prev, d, { strict: inc.strict });
     r.endAt = d.endAt; r.no = i + 1;
     out.push(r);
@@ -546,12 +638,12 @@ function diverResults(inc, dv) {
   });
   return out;
 }
-function diverState(dv) { return dv.current ? 'down' : (dv.dives.length ? 'rest' : 'wait'); }
+const lastResult = res => [...res].reverse().find(r => !r.deleted) || null;
+function diverState(dv) { return dv.current ? 'down' : (liveDives(dv).length ? 'rest' : 'wait'); }
 function allowanceFor(inc, dv, at = nowISO()) {
   const t = incidentTable(inc).data;
-  const res = diverResults(inc, dv);
-  const prev = res[res.length - 1] || null;
-  return Engine.allowance(t, prev, at, { forceFirst: dv.nextFirst });
+  const prev = lastResult(diverResults(inc, dv));
+  return Engine.allowance(t, prev, at, { forceFirst: dv.nextFirst, strict: inc.strict });
 }
 function limitFor(inc, dv, depth, startP, at) {
   const al = allowanceFor(inc, dv, at);
@@ -560,10 +652,11 @@ function limitFor(inc, dv, depth, startP, at) {
   const tableLim = row ? row.limit : null;
   const air = Engine.airMinutes(dv.tank ?? S.settings.tank, startP, S.settings.reserve, depth, dv.sac ?? S.settings.sac);
   const airLim = air == null ? null : Math.floor(air);
+  // 潜水表で決められないときは、空気の時間で代わりに埋めない（甘い上限を出さないため）
   let lim = null, by = null;
-  if (tableLim != null && airLim != null) { lim = Math.min(tableLim, airLim); by = airLim < tableLim ? '空気' : '潜水表'; }
-  else if (tableLim != null) { lim = tableLim; by = '潜水表'; }
-  else if (airLim != null) { lim = airLim; by = '空気'; }
+  if (tableLim == null) { lim = null; by = null; }
+  else if (airLim != null && airLim < tableLim) { lim = airLim; by = '空気'; }
+  else { lim = tableLim; by = '潜水表'; }
   return { al, td, tableLim, airLim, lim, by };
 }
 
@@ -589,14 +682,22 @@ function toast(msg, undo = false) {
   el.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button class="btn" data-act="undo">${ic('undo-2')}元に戻す</button>` : ''}`;
   el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; if (undo) undoSnap = null; }, undo ? 10000 : 2500);
+  toastTimer = setTimeout(() => { el.hidden = true; if (undo) undoSnap = null; }, undo ? 6000 : 2500);
 }
 
 /* ---------- 描画 ---------- */
 function bar(title, sub, back, right = '') {
   return `<header class="bar"><div class="bar-in">
     ${back ? `<button class="btn btn-icon" data-act="back" aria-label="戻る">${ic('chevron-left')}</button>` : ''}
-    <div class="bar-title">${title}${sub ? `<span class="bar-sub">${sub}</span>` : ''}</div>${right}</div></header>`;
+    <div class="bar-title">${title}${sub ? `<span class="bar-sub">${sub}</span>` : ''}</div>${right}</div></header>${globalAlerts()}`;
+}
+let updateReady = false;
+function globalAlerts() {
+  const a = [];
+  const upd = updateReady && view.name !== 'board' ? `<div class="alert soft row">${ic('rotate-ccw')}<span class="spacer">新しい版があります。記録中でなければ更新してください。</span><button class="btn" data-act="reload">更新する</button></div>` : '';
+  if (!storageOK) a.push('この端末に記録を保存できていません。このまま閉じると記録が消えます。紙にも控え、設定の「控えを作る」を試してください。');
+  if (loadNote) a.push(loadNote);
+  return a.length || upd ? `<div class="wrap wrap-alert">${a.map(t => `<div class="alert" role="alert">${ic('triangle-alert')}<span>${esc(t)}</span></div>`).join('')}${upd}</div>` : '';
 }
 function render() {
   applyTheme();
@@ -612,15 +713,18 @@ function render() {
 }
 function renderSheet() {
   const box = $('#sheet');
-  if (!sheet) { box.innerHTML = ''; box.hidden = true; document.body.style.overflow = ''; return; }
-  const fn = { down: sheetDown, up: sheetUp, diver: sheetDiver, edit: sheetEdit, addDiver: sheetAddDiver, editInc: sheetEditInc }[sheet.name];
-  box.innerHTML = `<div class="sheet-back" data-act="sheet-close-back"><div class="sheet" role="dialog" aria-modal="true">${fn()}</div></div>`;
+  if (!sheet) { box.innerHTML = ''; box.hidden = true; document.body.style.overflow = ''; if (sheetOpener?.isConnected) sheetOpener.focus(); sheetOpener = null; return; }
+  const fn = { down: sheetDown, up: sheetUp, diver: sheetDiver, edit: sheetEdit, addDiver: sheetAddDiver, editInc: sheetEditInc, clearSample: sheetClearSample }[sheet.name];
+  const wasOpen = !box.hidden;
+  box.innerHTML = `<div class="sheet-back" data-act="sheet-close-back"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${fn()}</div></div>`;
+  if (!wasOpen) { $('#sheet-title')?.focus(); $('#toast').hidden = true; }
   box.hidden = false;
   document.body.style.overflow = 'hidden';
 }
-function openSheet(name, extra = {}) { sheet = { name, ...extra }; renderSheet(); }
+let sheetOpener = null;
+function openSheet(name, extra = {}) { sheetOpener = document.activeElement; sheet = { name, ...extra }; renderSheet(); }
 function closeSheet() { sheet = null; renderSheet(); }
-const sheetHead = t => `<div class="sheet-head"><h1>${t}</h1><button class="btn btn-icon" data-act="sheet-close" aria-label="閉じる">${ic('x')}</button></div>`;
+const sheetHead = t => `<div class="sheet-head"><h1 id="sheet-title" tabindex="-1">${t}</h1><button class="btn btn-icon" data-act="sheet-close" aria-label="閉じる">${ic('x')}</button></div>`;
 
 /* ===== ホーム ===== */
 function viewHome() {
@@ -630,12 +734,12 @@ function viewHome() {
   const hasSample = S.members.some(m => m.sample) || S.incidents.some(i => i.sample);
   return `${bar('潜水現場記録', '宮古島市消防本部 潜水隊', false, `<button class="btn btn-icon" data-act="go" data-to="settings" aria-label="設定">${ic('settings')}</button>`)}
   <main class="wrap">
-    ${!storageOK ? `<div class="alert">${ic('triangle-alert')}<span>この端末では記録を保存できていません。ブラウザの設定（プライベートブラウズなど）を確認してください。</span></div>` : ''}
+    ${backupHint()}
     ${active.length ? `<section class="stack"><h2>進行中</h2><div class="list">${active.map(incRow).join('')}</div></section>` : ''}
     <section class="stack">
       <button class="btn btn-primary btn-big btn-block" data-act="go" data-to="new">${ic('plus')}新しい事案を始める</button>
       <div class="grid2">
-        <button class="btn" data-act="go" data-to="calc">${ic('calculator')}空気と時間の計算</button>
+        <button class="btn" data-act="go" data-to="calc">${ic('calculator')}空気の計算</button>
         <button class="btn" data-act="go" data-to="tables">${ic('table-2')}潜水表</button>
       </div>
     </section>
@@ -644,24 +748,34 @@ function viewHome() {
     </section>
     <section class="stack small">
       <div class="badge-line">${ic(t.data.verified ? 'shield-check' : 'circle-alert')}<span>使用中の潜水表：${esc(tableLabel(t))}（${t.data.verified ? '照合済み' : '照合前'}）</span></div>
-      ${hasSample ? `<div class="row"><span>「見本」と付いた隊員と事案は動作確認用です。</span><button class="link" data-act="clear-sample">見本を消す</button></div>` : ''}
+      ${hasSample ? `<div class="stack"><span>「見本」と付いた隊員と事案は動作確認用です。運用を始める前に消してください。</span><button class="btn" data-act="sheet" data-sheet="clearSample">${ic('trash-2')}見本を消す</button></div>` : ''}
     </section>
   </main>`;
 }
+function incTitle(inc) { return inc.title || `${inc.type} ${inc.site || ''} ${md(inc.createdAt)}`.replace(/\s+/g, ' ').trim(); }
 function incRow(inc) {
-  const n = inc.divers.reduce((a, d) => a + d.dives.length, 0);
+  const n = inc.divers.reduce((a, d) => a + liveDives(d).length, 0);
   const down = inc.divers.filter(d => d.current).length;
-  return `<button class="item" data-act="open-inc" data-id="${inc.id}">
+  const unsent = !inc.sample && inc.status !== 'active' && n && (!inc.sentAt || inc.sentAt < (inc.updatedAt || ''));
+  return `<button class="item" data-act="open-inc" data-id="${esc(inc.id)}">
     <div class="item-main">
-      <div class="item-title">${esc(inc.title || inc.type)}</div>
+      <div class="item-title">${esc(incTitle(inc))}${unsent ? ` <span class="state">${ic('send')}未送信</span>` : ''}</div>
       <div class="small">${md(inc.createdAt)} ${hm(inc.createdAt)}・${esc(inc.type)}・${esc(inc.site || '地点未入力')}・${inc.divers.length}人 ${n}本${down ? `・<b>潜水中 ${down}人</b>` : ''}</div>
     </div>${ic('chevron-right')}</button>`;
+}
+function backupHint() {
+  const real = S.incidents.filter(i => !i.sample).length;
+  if (!real) return '';
+  const last = S.settings.lastBackup;
+  const days = last ? Math.floor((Date.now() - new Date(last)) / 86400000) : null;
+  if (days != null && days < 30) return '';
+  return `<div class="alert soft">${ic('hard-drive-download')}<span>${last ? `最後に控えを作ってから ${days}日たちました。` : 'まだ控えを作っていません。'}端末の故障に備えて、設定の「控えを作る」で記録をファイルに残してください。</span></div>`;
 }
 
 /* ===== 新しい事案 ===== */
 let draft = null;
 function viewNew() {
-  if (!draft) draft = { type: '訓練', title: '', site: '', commanderId: '', divers: [], strict: false };
+  if (!draft) draft = { type: '訓練', title: '', site: '', commanderId: '', watchId: '', gas: '空気', divers: [], strict: false };
   const sites = [...new Set(S.incidents.map(i => i.site).filter(Boolean))];
   return `${bar('新しい事案', '', true)}
   <main class="wrap">
@@ -672,7 +786,10 @@ function viewNew() {
       <label class="field"><span>地点</span><input class="input" id="n-site" list="site-list" value="${esc(draft.site)}" placeholder="例：佐良浜漁港 北側岸壁" autocomplete="off"></label>
       <datalist id="site-list">${sites.map(s => `<option value="${esc(s)}">`).join('')}</datalist>
       <label class="field"><span>事案名（あとで入力できます）</span><input class="input" id="n-title" value="${esc(draft.title)}" placeholder="例：定期潜水訓練"></label>
-      <label class="field"><span>指揮者</span><select class="input" id="n-cmd"><option value="">選ぶ</option>${S.members.map(m => `<option value="${esc(m.id)}" ${draft.commanderId === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
+      <div class="grid2">
+        <label class="field"><span>指揮者</span>${memberSelect('n-cmd', draft.commanderId)}</label>
+        <label class="field"><span>監視員</span>${memberSelect('n-watch', draft.watchId)}</label>
+      </div>
     </section>
     <section class="stack"><h2>潜水員（あとで追加できます）</h2>
       ${S.members.length ? `<div class="chips">${S.members.map(m => `<button class="chip" data-act="draft-diver" data-v="${esc(m.id)}" aria-pressed="${draft.divers.includes(m.id)}">${ic('check')}${esc(m.name)}</button>`).join('')}</div>`
@@ -687,18 +804,22 @@ function readDraft() {
   draft.site = $('#n-site')?.value.trim() ?? draft.site;
   draft.title = $('#n-title')?.value.trim() ?? draft.title;
   draft.commanderId = $('#n-cmd')?.value ?? draft.commanderId;
+  draft.watchId = $('#n-watch')?.value ?? draft.watchId;
   draft.strict = $('#n-strict')?.checked ?? draft.strict;
 }
+
+const memberSelect = (id, cur) => `<select class="input" id="${id}"><option value="">選ぶ</option>${S.members.map(m => `<option value="${esc(m.id)}" ${cur === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>`;
 
 /* ===== 潜水員ボード ===== */
 function viewBoard() {
   const inc = curInc();
   if (!inc) return viewHome();
   const t = incidentTable(inc);
-  return `${bar(esc(inc.title || inc.type), `${esc(inc.type)}・${esc(inc.site || '地点未入力')}・${hm(inc.createdAt)}開始`, true,
+  return `${bar(esc(incTitle(inc)), `${inc.title ? `${esc(inc.type)}・${esc(inc.site || '地点未入力')}・` : ''}${hm(inc.createdAt)}開始${inc.commanderId ? `・指揮 ${esc(member(inc.commanderId).name)}` : ''}`, true,
     `<button class="btn btn-icon" data-act="sheet" data-sheet="editInc" aria-label="事案の情報">${ic('pencil')}</button>`)}
   <main class="wrap">
     ${inc.status !== 'active' ? `<div class="alert soft">${ic('info')}<span>この事案は終了しています。記録の修正はできます。</span></div>` : ''}
+    ${t.missing ? `<div class="alert">${ic('triangle-alert')}<span>この事案を始めたときの潜水表が見つからないため、使用中の表で計算しています。</span></div>` : ''}
     <section>
       ${inc.divers.length ? `<div class="list">${inc.divers.map((dv, i) => diverRow(inc, dv, i)).join('')}</div>`
         : `<p>潜水員がまだいません。下の「潜水員を追加」から加えてください。</p>`}
@@ -709,43 +830,49 @@ function viewBoard() {
       <span class="small badge-line">${ic(t.data.verified ? 'shield-check' : 'circle-alert')}${esc(tableLabel(t))}${inc.strict ? '・1段階厳しく' : ''}</span>
     </section>
   </main>
-  <div class="dock"><div class="dock-in"><button class="btn btn-big" data-act="go-summary">${ic('flag')}${inc.status === 'active' ? '終了して書き出す' : '記録を見る・書き出す'}</button></div></div>`;
+  <div class="dock"><div class="dock-in"><button class="btn btn-big" data-act="go-summary">${ic('flag')}${inc.status === 'active' ? '終了の手続きへ' : '記録を見る・送る'}</button></div></div>`;
 }
 function diverRow(inc, dv, i) {
   const st = diverState(dv);
   const m = member(dv.memberId);
   const res = diverResults(inc, dv);
-  const last = res[res.length - 1];
+  const last = lastResult(res);
+  const n = liveDives(dv).length;
   let clock = '', info = '', btn = '', stateLabel = '';
   if (st === 'down') {
     const c = dv.current;
     const L = limitFor(inc, dv, c.plannedDepth, c.startP, c.startAt);
-    stateLabel = `<span class="state active">${ic('arrow-down-to-line')}潜水中</span>`;
-    clock = `<div class="clock" data-from="${c.startAt}" data-limit="${L.lim ?? ''}">00:00</div>`;
-    info = `予定 ${c.plannedDepth ?? '—'}m・上限 <b class="num">${L.lim ?? '—'}分</b>${L.by ? `（${L.by}で決まる）` : ''}<span data-remain-from="${c.startAt}" data-limit="${L.lim ?? ''}"></span>`;
-    btn = `<button class="btn btn-primary" data-act="sheet" data-sheet="up" data-i="${i}">${ic('arrow-up-from-line')}浮上</button>`;
+    stateLabel = c.ascentAt ? `<span class="state on">${ic('arrow-up')}浮上中 ${hm(c.ascentAt)}〜</span>` : `<span class="state on">${ic('arrow-down-to-line')}潜水中</span>`;
+    clock = `<div class="clock" data-from="${esc(c.startAt)}">00:00</div>`;
+    info = `<div>予定 ${c.plannedDepth ?? '—'}m・上限 <b class="num">${L.lim ?? '—'}分</b>${L.by ? `（${L.by}で決まる）` : '（潜水表で判断できません）'}</div>`;
+    info += `<div class="remain" data-remain-from="${esc(c.startAt)}" data-limit="${L.lim ?? ''}" data-stop="${esc(c.ascentAt || '')}"></div>`;
+    btn = c.ascentAt
+      ? `<button class="btn btn-primary" data-act="sheet" data-sheet="up" data-i="${i}">${ic('arrow-up-from-line')}水面に着いた</button><button class="btn btn-quiet btn-under" data-act="ascent-undo" data-i="${i}">浮上開始を取り消す</button>`
+      : `<button class="btn btn-primary" data-act="ascent" data-i="${i}">${ic('arrow-up')}浮上開始</button><button class="btn btn-quiet btn-under" data-act="sheet" data-sheet="up" data-i="${i}">もう水面にいる</button>`;
   } else if (st === 'rest') {
     const al = allowanceFor(inc, dv);
     stateLabel = `<span class="state">${ic('timer')}水面休息</span>`;
-    clock = `<div class="clock" data-from="${last.endAt}" data-mode="hm">0:00</div>`;
+    clock = `<div class="clock" data-from="${esc(last.endAt)}" data-mode="hm">0:00</div>`;
     const g = last.group ? `グループ ${last.group}` : 'グループなし';
     if (al.ok) {
-      const lastD = dv.dives[dv.dives.length - 1];
+      const lastD = liveDives(dv).slice(-1)[0];
       const td = Engine.tableDepthFor(incidentTable(inc).data, lastD.plannedDepth ?? lastD.maxDepth);
       const row = al.rows.find(r => r.depth === td);
-      info = `${g} → 今なら ${al.first ? '1本目扱い' : `グループ ${al.incoming}`}・次も${td ?? '—'}mなら <b class="num">${row && row.limit ? row.limit + '分' : '潜れません'}</b>`;
-    } else info = `${g}・${esc(al.note || '')}`;
+      info = `<div class="next">次に${td ?? '—'}mなら <b class="num">${row && row.limit ? row.limit + '分まで' : '潜れません'}</b></div>
+        <div class="small">${g} → 今は${al.first ? '1本目扱い' : `グループ ${al.incoming}`}${inc.strict ? '・1段階厳しく' : ''}</div>`;
+    } else info = `<div class="small">${g}・${esc(al.note || '')}</div>`;
     btn = `<button class="btn btn-primary" data-act="sheet" data-sheet="down" data-i="${i}">${ic('arrow-down-to-line')}潜降</button>`;
   } else {
     stateLabel = `<span class="state">待機</span>`;
-    clock = `<div class="clock">—</div>`;
-    info = 'まだ潜っていません';
+    info = '<div class="small">まだ潜っていません</div>';
     btn = `<button class="btn btn-primary" data-act="sheet" data-sheet="down" data-i="${i}">${ic('arrow-down-to-line')}潜降</button>`;
   }
-  const warn = last && (last.status === 'deco' || last.status === 'out')
+  const recentDel = dv.dives.some(d => d.deleted && Date.now() - new Date(d.endAt) < 86400000);
+  if (recentDel) info += '<div class="small"><b>削除した潜水は計算に入っていません。</b>本当に潜った記録なら、削除を取り消すか指揮者が判断してください。</div>';
+  const warn = last && (last.status === 'deco' || last.status === 'out' || last.omitted)
     ? `<div class="alert" style="grid-column:1/-1">${ic('triangle-alert')}<span>${esc(last.warnings.filter(w => w.level === 'stop').map(w => w.text).join(' ') || '判定を確認してください')}</span></div>` : '';
   return `<div class="diver">
-    <button class="diver-head" data-act="sheet" data-sheet="diver" data-i="${i}"><span class="diver-name">${esc(m.name)}</span>${stateLabel}<span class="small">${dv.dives.length}本${ic('chevron-right')}</span></button>
+    <button class="diver-head" data-act="sheet" data-sheet="diver" data-i="${i}"><span class="diver-name">${esc(m.name)}</span>${stateLabel}<span class="small">${st === 'down' ? `${n + 1}本目` : `${n}本`}${ic('chevron-right')}</span></button>
     <div class="diver-act">${btn}</div>
     ${clock}
     <div class="diver-info">${info}</div>
@@ -757,60 +884,87 @@ function diverRow(inc, dv, i) {
 function sheetDown() {
   const inc = curInc(), dv = inc.divers[sheet.i], m = member(dv.memberId);
   const t = incidentTable(inc).data;
-  sheet.depth ??= dv.dives.length ? (dv.dives[dv.dives.length - 1].plannedDepth ?? null) : null;
+  sheet.depth ??= liveDives(dv).length ? (liveDives(dv).slice(-1)[0].plannedDepth ?? null) : null;
   sheet.startP ??= S.settings.startP;
   sheet.tank ??= dv.tank ?? S.settings.tank;
   const L = sheet.depth != null ? limitFor(inc, dv, sheet.depth, sheet.startP, nowISO()) : null;
   const al = allowanceFor(inc, dv);
-  return `${sheetHead(`${esc(m.name)}　${dv.dives.length + 1}本目の潜降`)}
+  return `${sheetHead(`${esc(m.name)}　${liveDives(dv).length + 1}本目の潜降`)}
   ${!al.ok ? `<div class="alert">${ic('triangle-alert')}<span>${esc(al.note)}${al.over ? '' : ''}</span></div>${al.over ? `<button class="btn" data-act="next-first" data-i="${sheet.i}">${ic('rotate-ccw')}1本目として扱う（指揮者判断）</button>` : ''}` : ''}
   <section class="stack"><h2>予定の最大水深</h2>
-    <div class="chips">${t.depths.map(d => `<button class="chip num" data-act="down-depth" data-v="${d}" aria-pressed="${sheet.depth === d}">${ic('check')}${d}m</button>`).join('')}</div>
+    <div class="chips chips-grid">${t.depths.map(d => `<button class="chip num" data-act="down-depth" data-v="${d}" aria-pressed="${sheet.depth === d}">${ic('check')}${d}m</button>`).join('')}</div>
   </section>
   <div class="grid2">
     <label class="field"><span>開始圧（気圧）</span><input class="input num" id="d-startp" inputmode="numeric" value="${esc(sheet.startP)}"></label>
     <label class="field"><span>タンク容量（L）</span><input class="input num" id="d-tank" inputmode="decimal" value="${esc(sheet.tank)}"></label>
   </div>
   ${L ? `<section class="stack">
-    <div class="verdict">${ic('clock')}<span>この潜水の上限 <span class="num">${L.lim ?? '—'}</span>分</span></div>
+    <div class="verdict">${ic('clock')}<span>${L.lim == null ? '潜水表で上限を決められません' : `この潜水の上限 <span class="num">${L.lim}</span>分`}</span></div>
+    <p class="small">計算の目安です。ダイブコンピュータと指揮者の判断を優先してください。</p>
     <dl class="kv small"><dt>潜水表</dt><dd class="num">${L.tableLim ?? '—'}分（表の水深 ${L.td ?? '—'}m${L.al.ok && !L.al.first ? `・グループ ${L.al.incoming}` : ''}）</dd>
     <dt>空気</dt><dd class="num">${L.airLim ?? '—'}分（残圧 ${S.settings.reserve}気圧を残す・消費 ${dv.sac ?? S.settings.sac}L/分）</dd></dl>
     ${L.tableLim === 0 ? `<div class="alert">${ic('triangle-alert')}<span>潜水表ではこの水深に潜れる時間がありません。</span></div>` : ''}
     ${L.al.ok && !L.al.first && L.al.rows.find(r => r.depth === L.td)?.avoid ? `<div class="alert soft">${ic('info')}<span>${incidentTable(inc).data.rules.avoidRepetitiveDeeperThan}mより深い反復潜水は避けるよう、潜水表に記載があります。</span></div>` : ''}
   </section>` : '<p class="small">水深を選ぶと、潜れる時間を表示します。</p>'}
-  <button class="btn btn-primary btn-big btn-block" data-act="do-down">${ic('arrow-down-to-line')}潜降を記録（<span data-now>${hm(nowISO())}</span>）</button>`;
+  ${sheet.depth == null ? `<button class="btn btn-primary btn-big btn-block" disabled>${ic('arrow-down-to-line')}予定の水深を選んでください</button>`
+    : `<button class="btn btn-primary btn-big btn-block" data-act="do-down">${ic('arrow-down-to-line')}潜降を記録（<span data-now>${hm(nowISO())}</span>）</button>`}`;
 }
 
 /* ----- 浮上 ----- */
+function upDefaults(inc, dv) {
+  const c = dv.current, t = incidentTable(inc).data;
+  const stopMin = t.rules?.safetyStopMinutes ?? 3;
+  const endAt = sheet.endTouched ? sheet.endAt : nowISO();
+  const ascentAt = sheet.ascentTouched ? sheet.ascentAt : (c.ascentAt || null);
+  const elapsed = Math.ceil(minsBetween(c.startAt, endAt));
+  // NAUIの潜水時間は、潜降開始から浮上開始まで。浮上開始がなければ経過時間から安全停止の分を引いた目安（安全停止を選ぶまでは引かない）
+  const adt = ascentAt ? Math.max(1, Math.ceil(minsBetween(c.startAt, ascentAt))) : Math.max(1, elapsed - (sheet.safety === '有' ? stopMin : 0));
+  return { endAt, ascentAt, elapsed, adt, stopMin };
+}
+function upDive(inc, dv) {
+  const c = dv.current, dec = numOrBlank(sheet.decoStop);
+  return { maxDepth: numOrBlank(sheet.maxDepth) === '' ? null : numOrBlank(sheet.maxDepth), adt: numOrBlank(sheet.adt) === '' ? null : numOrBlank(sheet.adt),
+    startAt: c.startAt, endAt: upDefaults(inc, dv).endAt, treatAsFirst: dv.nextFirst, decoStopDone: dec === '' ? null : dec };
+}
+function upResult(inc, dv) { return Engine.computeDive(incidentTable(inc).data, lastResult(diverResults(inc, dv)), upDive(inc, dv), { strict: inc.strict }); }
 function sheetUp() {
   const inc = curInc(), dv = inc.divers[sheet.i], m = member(dv.memberId), c = dv.current;
-  const t = incidentTable(inc).data;
   if (!sheet.init) {
-    const el = Math.ceil(minsBetween(c.startAt, nowISO()));
-    sheet.init = true; sheet.endAt = nowISO(); sheet.safety = true;
-    sheet.maxDepth = c.plannedDepth ?? ''; sheet.adt = Math.max(1, el - (t.rules?.safetyStopMinutes ?? 3));
-    sheet.elapsed = el; sheet.endP = ''; sheet.cond = '無'; sheet.note = '';
+    sheet.init = true; sheet.safety = null; sheet.endTouched = false; sheet.ascentTouched = false;
+    sheet.maxDepth = ''; sheet.endP = ''; sheet.cond = null; sheet.note = ''; sheet.decoStop = ''; sheet.adtTouched = false;
   }
-  const prevRes = diverResults(inc, dv);
-  const r = Engine.computeDive(t, prevRes[prevRes.length - 1] || null,
-    { maxDepth: sheet.maxDepth === '' ? null : Number(sheet.maxDepth), adt: sheet.adt === '' ? null : Number(sheet.adt), startAt: c.startAt, endAt: sheet.endAt, treatAsFirst: dv.nextFirst }, { strict: inc.strict });
-  return `${sheetHead(`${esc(m.name)}　${dv.dives.length + 1}本目の浮上`)}
-  <p class="small num">潜降 ${hm(c.startAt)} → 浮上 ${hm(sheet.endAt)}（経過 ${sheet.elapsed}分）</p>
-  <div class="grid2">
-    <label class="field"><span>最大水深（m）</span><input class="input num" id="u-depth" inputmode="decimal" value="${esc(sheet.maxDepth)}" data-live></label>
+  const u = upDefaults(inc, dv);
+  if (!sheet.adtTouched) sheet.adt = String(u.adt);
+  const r = upResult(inc, dv);
+  sheet.shown = r.status;
+  const pd = Number(c.plannedDepth);
+  const quick = isFinite(pd) && pd > 0 ? [pd - 2, pd - 1, pd, pd + 1, pd + 2].filter(x => x > 0) : [];
+  const ascLong = u.ascentAt && minsBetween(u.ascentAt, u.endAt) > 15;
+  return `${sheetHead(`${esc(m.name)}　${liveDives(dv).length + 1}本目の浮上`)}
+  <p class="small num">潜降 ${hm(c.startAt)}・予定 ${c.plannedDepth ?? '—'}m</p>
+  <div class="grid3">
+    <label class="field"><span>浮上開始</span><input class="input num" id="u-asc" type="time" value="${u.ascentAt ? hm(u.ascentAt) : ''}" data-live></label>
+    <label class="field"><span>水面に着いた</span><input class="input num" id="u-end" type="time" value="${hm(u.endAt)}" data-live></label>
     <label class="field"><span>潜水時間（分）</span><input class="input num" id="u-adt" inputmode="numeric" value="${esc(sheet.adt)}" data-live></label>
   </div>
-  <label class="check"><input type="checkbox" id="u-safety" ${sheet.safety ? 'checked' : ''} data-live><span>5mで${t.rules?.safetyStopMinutes ?? 3}分の安全停止をした<br><span class="small">安全停止の時間は潜水時間に含めません（経過時間から差し引いて入れています）。</span></span></label>
+  <p class="small">${u.ascentAt ? '潜水時間は、潜降から浮上開始までです。' : '浮上開始の時刻がないため、潜水時間は経過時間からの目安です。浮上開始の時刻を入れると正確になります。'}</p>
+  ${ascLong ? `<div class="alert soft">${ic('info')}<span>浮上開始から水面まで ${Math.round(minsBetween(u.ascentAt, u.endAt))}分あります。浮上開始の時刻を確かめてください。</span></div>` : ''}
+  <div class="field"><span>最大水深（m）<b>必須</b></span>
+    <input class="input num" id="u-depth" inputmode="decimal" value="${esc(sheet.maxDepth)}" placeholder="深度計の最大値" data-live>
+    ${quick.length ? `<div class="chips chips-grid5">${quick.map(x => `<button class="chip num" data-act="up-depth" data-v="${x}" aria-pressed="${String(sheet.maxDepth) === String(x)}">${ic('check')}${x}m</button>`).join('')}</div>` : ''}
+  </div>
+  <section class="stack" id="u-result">${resultBlock(r)}</section>
+  <div class="field"><span>5mで${u.stopMin}分の安全停止<b>必須</b></span><div class="chips">${['有', '無'].map(v => `<button class="chip" data-act="up-safety" data-v="${v}" aria-pressed="${sheet.safety === v}">${ic('check')}${v}</button>`).join('')}</div></div>
+  ${r.status === 'deco' ? `<label class="field"><span>5mで実際に止まった時間（分）<b>必須</b></span><input class="input num" id="u-deco" inputmode="numeric" value="${esc(sheet.decoStop)}" placeholder="表では ${r.stop5}分" data-live></label>` : ''}
   <div class="grid2">
     <label class="field"><span>終了圧（気圧）</span><input class="input num" id="u-endp" inputmode="numeric" value="${esc(sheet.endP)}"></label>
-    <div class="field"><span>体調異常</span><div class="chips">${['無', '有'].map(v => `<button class="chip" data-act="up-cond" data-v="${v}" aria-pressed="${sheet.cond === v}">${ic('check')}${v}</button>`).join('')}</div></div>
+    <div class="field"><span>体調異常<b>必須</b></span><div class="chips">${['無', '有'].map(v => `<button class="chip" data-act="up-cond" data-v="${v}" aria-pressed="${sheet.cond === v}">${ic('check')}${v}</button>`).join('')}</div></div>
   </div>
-  ${sheet.cond === '有' ? `<label class="field"><span>体調異常の内容</span><input class="input" id="u-note" value="${esc(sheet.note)}" placeholder="例：右耳の違和感。浮上後に回復"></label>` : ''}
-  <section class="stack" id="u-result">${resultBlock(r)}</section>
+  <label class="field"><span>${sheet.cond === '有' ? '体調異常の内容' : '備考'}</span><input class="input" id="u-note" value="${esc(sheet.note)}" placeholder="${sheet.cond === '有' ? '例：右耳の違和感。浮上後に回復' : '例：視界不良のため早めに浮上'}"></label>
   <button class="btn btn-primary btn-big btn-block" data-act="do-up">${ic('arrow-up-from-line')}浮上を記録</button>`;
 }
 function resultBlock(r) {
-  if (!r || r.status === 'na') return '<p class="small">最大水深と潜水時間を入れると判定を表示します。</p>';
+  if (!r || r.status === 'na') return `<p class="small">最大水深と潜水時間を入れると判定を表示します。</p>${(r?.warnings || []).map(w => `<div class="alert">${ic('triangle-alert')}<span>${esc(w.text)}</span></div>`).join('')}`;
   const verdict = { ok: [ 'circle-check', '無減圧' ], deco: [ 'triangle-alert', `減圧停止 5mで${r.stop5}分` ], out: [ 'triangle-alert', '表の範囲外' ] }[r.status] || ['info', '—'];
   return `<div class="verdict">${ic(verdict[0])}<span>${verdict[1]}</span></div>
     <div class="result">
@@ -818,40 +972,50 @@ function resultBlock(r) {
       <div><b>${r.tnt ?? '—'}</b><span>合計窒素時間（分）</span></div>
       <div><b>${r.amdt ?? '—'}</b><span>上限（分）</span></div>
     </div>
-    ${r.warnings.map(w => `<div class="alert ${w.level === 'stop' ? '' : 'soft'}">${ic(w.level === 'stop' ? 'triangle-alert' : 'info')}<span>${esc(w.text)}</span></div>`).join('')}`;
+    ${r.warnings.map(w => `<div class="alert ${w.level === 'stop' ? '' : 'soft'}">${ic(w.level === 'stop' ? 'triangle-alert' : 'info')}<span>${esc(w.text)}</span></div>`).join('')}
+    <p class="small">潜水表による計算の目安です。ダイブコンピュータと指揮者の判断を優先してください。</p>`;
 }
 
 /* ----- 潜水員の詳細 ----- */
+const after14h = iso => hm(new Date(new Date(iso).getTime() + 14 * 3600000).toISOString());
+function diveLine(d, r, k, act) {
+  if (d.deleted) return `<div class="item dive-line is-deleted"><div class="item-main"><div class="item-title">${k + 1}本目（削除済み）</div><div class="small num">${hm(d.startAt)}→${hm(d.endAt)}・${d.maxDepth ?? '—'}m・${d.adt ?? '—'}分</div></div></div>`;
+  const alertish = r.status === 'deco' || r.status === 'out' || d.condition === '有';
+  return `<button class="item dive-line" ${act}>
+    <div class="item-main">
+      <div class="item-title num">${alertish ? ic('triangle-alert') : ''}${k + 1}本目　${hm(d.startAt)}→${hm(d.endAt)}　${d.maxDepth ?? '—'}m　${d.adt ?? '—'}分</div>
+      <div class="small">グループ ${r.group ?? '—'}・${statusText(r)}${d.condition === '有' ? '・<b>体調異常 有</b>' : ''}${d.edits?.length ? `・修正${d.edits.length}回` : ''}${d.treatAsFirst ? '・1本目扱い' : ''}</div>
+    </div>${act ? ic('pencil') : ''}</button>`;
+}
 function sheetDiver() {
   const inc = curInc(), dv = inc.divers[sheet.i], m = member(dv.memberId);
   const res = diverResults(inc, dv);
   const al = dv.current ? null : allowanceFor(inc, dv);
+  const lastD = liveDives(dv).slice(-1)[0];
   return `${sheetHead(esc(m.name))}
   <section class="stack"><h2>潜水の記録</h2>
-  ${dv.dives.length ? `<div class="tablebox"><table class="t"><thead><tr><th>本</th><th>潜降</th><th>浮上</th><th>水深</th><th>時間</th><th>グループ</th><th>判定</th><th></th></tr></thead><tbody>
-    ${dv.dives.map((d, k) => { const r = res[k]; return `<tr><td>${k + 1}</td><td>${hm(d.startAt)}</td><td>${hm(d.endAt)}</td><td>${d.maxDepth ?? '—'}m</td><td>${d.adt ?? '—'}分</td><td>${r.group ?? '—'}</td><td>${statusText(r)}</td>
-    <td><button class="btn btn-icon" data-act="sheet" data-sheet="edit" data-i="${sheet.i}" data-k="${k}" aria-label="${k + 1}本目を修正">${ic('pencil')}</button></td></tr>`; }).join('')}
-  </tbody></table></div>` : '<p class="small">まだ潜っていません。</p>'}
+  ${dv.dives.length ? `<div class="list">${dv.dives.map((d, k) => diveLine(d, res[k], k, `data-act="sheet" data-sheet="edit" data-i="${sheet.i}" data-k="${k}" aria-label="${k + 1}本目を修正"`)).join('')}</div>` : '<p class="small">まだ潜っていません。</p>'}
+  ${lastD ? `<p class="small">浮上から14時間（${after14h(lastD.endAt)} まで）は、重激な業務を避けてください（高圧則 第18条）。</p>` : ''}
   </section>
   ${al ? `<section class="stack"><h2>今から潜る場合の上限</h2>
-    ${al.ok ? `<p class="small">${al.first ? '1本目として計算' : `休息 ${hmText(al.siMin)}・グループ ${al.incoming}`}</p>
+    ${al.ok ? `<p class="small">${al.first ? '1本目として計算' : `休息 ${hmText(al.siMin)}・グループ ${al.incoming}`}${inc.strict ? '・1段階厳しく' : ''}</p>
     <div class="tablebox"><table class="t"><thead><tr><th>表の水深</th><th>残留窒素（分）</th><th>潜れる時間（分）</th></tr></thead><tbody>
     ${al.rows.map(r => `<tr><td>${r.depth}m</td><td>${r.rnt ?? '—'}</td><td>${r.limit ? r.limit : (r.noData ? '記載なし（0）' : '0')}${r.avoid ? '・避ける' : ''}</td></tr>`).join('')}</tbody></table></div>
     <p class="small">「記載なし」は表に数値がない水深で、潜らない扱いです。「避ける」は表に「30mより深い反復潜水は避ける」とある水深です。</p>`
     : `<div class="alert">${ic('triangle-alert')}<span>${esc(al.note)}</span></div>${al.over ? `<button class="btn" data-act="next-first" data-i="${sheet.i}">${ic('rotate-ccw')}1本目として扱う（指揮者判断）</button>` : ''}`}
   </section>` : ''}
-  ${dv.nextFirst ? `<p class="small">次の潜水は1本目として扱います。<button class="link" data-act="next-first-off" data-i="${sheet.i}">取り消す</button></p>` : ''}
+  ${dv.nextFirst ? `<p class="small">次の潜水は1本目として扱います（指揮者判断）。<button class="link" data-act="next-first-off" data-i="${sheet.i}">取り消す</button></p>` : ''}
   ${!dv.dives.length && !dv.current ? `<button class="btn" data-act="remove-diver" data-i="${sheet.i}">${ic('trash-2')}この事案から外す</button>` : ''}`;
 }
-function statusText(r) { return ({ ok: '無減圧', deco: `減圧 ${r.stop5}分`, out: '範囲外', na: '—' })[r.status] || '—'; }
+function statusText(r) { return r.deleted ? '削除' : (({ ok: '無減圧', deco: `減圧 ${r.stop5}分`, out: '範囲外', na: '—' })[r.status] || '—'); }
 
-/* ----- 記録の修正 ----- */
+/* ----- 記録の修正（前の値と日時を履歴に残す） ----- */
 function sheetEdit() {
   const inc = curInc(), dv = inc.divers[sheet.i], d = dv.dives[sheet.k];
   return `${sheetHead(`${esc(member(dv.memberId).name)}　${sheet.k + 1}本目を修正`)}
   <div class="grid2">
     <label class="field"><span>潜降時刻</span><input class="input num" id="e-start" type="time" value="${hm(d.startAt)}"></label>
-    <label class="field"><span>浮上時刻</span><input class="input num" id="e-end" type="time" value="${hm(d.endAt)}"></label>
+    <label class="field"><span>水面に着いた時刻</span><input class="input num" id="e-end" type="time" value="${hm(d.endAt)}"></label>
     <label class="field"><span>最大水深（m）</span><input class="input num" id="e-depth" inputmode="decimal" value="${esc(d.maxDepth ?? '')}"></label>
     <label class="field"><span>潜水時間（分）</span><input class="input num" id="e-adt" inputmode="numeric" value="${esc(d.adt ?? '')}"></label>
     <label class="field"><span>開始圧（気圧）</span><input class="input num" id="e-startp" inputmode="numeric" value="${esc(d.startP ?? '')}"></label>
@@ -859,11 +1023,23 @@ function sheetEdit() {
   </div>
   <div class="field"><span>体調異常</span><div class="chips">${['無', '有'].map(v => `<button class="chip" data-act="edit-cond" data-v="${v}" aria-pressed="${(sheet.cond ?? d.condition) === v}">${ic('check')}${v}</button>`).join('')}</div></div>
   <label class="field"><span>備考</span><input class="input" id="e-note" value="${esc(d.note ?? '')}"></label>
-  <label class="check"><input type="checkbox" id="e-first" ${d.treatAsFirst ? 'checked' : ''}><span>この潜水を1本目として扱う（前の潜水と切り離す）</span></label>
-  <div class="grid2">
-    <button class="btn" data-act="delete-dive">${ic('trash-2')}この記録を削除</button>
-    <button class="btn btn-primary" data-act="save-edit">${ic('check')}修正を保存</button>
-  </div>`;
+  <label class="field"><span>直す・削除する理由<b>必須</b></span><input class="input" id="e-why" placeholder="例：深度計の読み違い"></label>
+  ${d.edits?.length ? `<details><summary class="small"><b>これまでの修正（${d.edits.length}回）</b></summary><ul class="small">${d.edits.map(x => `<li>${ymd(x.at)} ${hm(x.at)}　${esc(x.why || '')}（前：${esc(x.before)}）</li>`).join('')}</ul></details>` : ''}
+  <button class="btn btn-primary btn-big btn-block" data-act="save-edit">${ic('check')}修正を保存</button>
+  <hr class="rule">
+  <button class="btn btn-quiet" data-act="delete-dive">${ic('trash-2')}この記録を削除（削除した記録も署へ送るCSVに残ります）</button>`;
+}
+const diveSummary = d => `${hm(d.startAt)}→${hm(d.endAt)} ${d.maxDepth ?? '—'}m ${d.adt ?? '—'}分 開始圧${d.startP ?? '—'} 終了圧${d.endP ?? '—'} 体調${d.condition || '—'}`;
+
+/* ----- 見本を消す ----- */
+function sheetClearSample() {
+  const sm = S.members.filter(m => m.sample), ids = sm.map(m => m.id);
+  const si = S.incidents.filter(i => i.sample);
+  const mixed = S.incidents.filter(i => !i.sample && (ids.includes(i.commanderId) || ids.includes(i.watchId) || i.divers.some(d => ids.includes(d.memberId))));
+  return `${sheetHead('見本を消す')}
+  <p>見本の隊員 ${sm.length}人と、見本の事案 ${si.length}件を消します。</p>
+  ${mixed.length ? `<div class="alert">${ic('triangle-alert')}<span>見本の隊員が入った、自分で作った事案が ${mixed.length}件あります（${mixed.map(i => esc(incTitle(i))).join('、')}）。これらも消します。</span></div>` : ''}
+  <button class="btn btn-primary btn-big btn-block" data-act="clear-sample">${ic('trash-2')}見本を消す</button>`;
 }
 
 /* ----- 潜水員の追加 ----- */
@@ -883,7 +1059,11 @@ function sheetEditInc() {
   <div class="chips">${TYPES.map(t => `<button class="chip" data-act="inc-type" data-v="${t}" aria-pressed="${(sheet.type ?? inc.type) === t}">${ic('check')}${t}</button>`).join('')}</div>
   <label class="field"><span>事案名</span><input class="input" id="i-title" value="${esc(inc.title)}"></label>
   <label class="field"><span>地点</span><input class="input" id="i-site" value="${esc(inc.site)}"></label>
-  <label class="field"><span>指揮者</span><select class="input" id="i-cmd"><option value="">選ぶ</option>${S.members.map(m => `<option value="${esc(m.id)}" ${inc.commanderId === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
+  <div class="grid2">
+    <label class="field"><span>指揮者</span>${memberSelect('i-cmd', inc.commanderId)}</label>
+    <label class="field"><span>監視員</span>${memberSelect('i-watch', inc.watchId)}</label>
+  </div>
+  <label class="field"><span>呼吸ガス</span><input class="input" id="i-gas" value="${esc(inc.gas ?? '空気')}"></label>
   <div class="grid3">
     <label class="field"><span>水温（℃）</span><input class="input num" id="i-temp" inputmode="decimal" value="${esc(inc.waterTemp)}"></label>
     <label class="field"><span>透視度（m）</span><input class="input num" id="i-vis" inputmode="decimal" value="${esc(inc.visibility)}"></label>
@@ -894,45 +1074,49 @@ function sheetEditInc() {
   ${inc.status === 'active' && !inc.divers.some(d => d.dives.length || d.current) ? `<button class="btn" data-act="delete-inc">${ic('trash-2')}この事案を削除</button>` : ''}`;
 }
 
-/* ===== 終了・書き出し ===== */
+/* ===== 終了・送る ===== */
 function viewSummary() {
   const inc = curInc();
   if (!inc) return viewHome();
   const rows = csvRows(inc);
+  const live = rows.filter(r => !r.deleted);
   const downNow = inc.divers.filter(d => d.current).map(d => member(d.memberId).name);
-  return `${bar('記録と書き出し', esc(inc.title || inc.type), true)}
+  const active = inc.status === 'active';
+  const missing = [!inc.site && '地点', !inc.commanderId && '指揮者', !inc.watchId && '監視員'].filter(Boolean);
+  return `${bar(active ? '終了の手続き' : '記録と送信', esc(incTitle(inc)), true)}
   <main class="wrap">
     <section class="stack">
-      <h1><span class="u">${esc(inc.title || inc.type)}</span></h1>
+      <h1><span class="u">${esc(incTitle(inc))}</span></h1>
       <dl class="kv">
         <dt>日時</dt><dd>${ymd(inc.createdAt)} ${hm(inc.createdAt)}〜${inc.closedAt ? hm(inc.closedAt) : ''}</dd>
         <dt>区分・地点</dt><dd>${esc(inc.type)}・${esc(inc.site || '未入力')}</dd>
         <dt>指揮者</dt><dd>${esc(inc.commanderId ? member(inc.commanderId).name : '未入力')}</dd>
+        <dt>監視員</dt><dd>${esc(inc.watchId ? member(inc.watchId).name : '未入力')}</dd>
+        <dt>呼吸ガス</dt><dd>${esc(inc.gas ?? '空気')}</dd>
         <dt>海況</dt><dd>水温 ${esc(inc.waterTemp || '—')}℃・透視度 ${esc(inc.visibility || '—')}m・${esc(inc.sea || '—')}</dd>
         <dt>潜水表</dt><dd>${esc(tableLabel(incidentTable(inc)))}</dd>
       </dl>
       <button class="btn" data-act="sheet" data-sheet="editInc">${ic('pencil')}事案の情報を直す</button>
     </section>
-    ${downNow.length ? `<div class="alert">${ic('triangle-alert')}<span>まだ潜水中の人がいます：${esc(downNow.join('、'))}。浮上を記録してから終了してください。</span></div>` : ''}
-    <section class="stack"><h2>潜水の記録（${rows.length}本）</h2>
-      ${rows.length ? `<div class="tablebox"><table class="t"><thead><tr><th>潜水員</th><th>本</th><th>潜降</th><th>浮上</th><th>水深</th><th>時間</th><th>休息</th><th>グループ</th><th>判定</th><th>体調</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${esc(r.name)}</td><td>${r.no}</td><td>${hm(r.startAt)}</td><td>${hm(r.endAt)}</td><td>${r.maxDepth ?? '—'}m</td><td>${r.adt ?? '—'}分</td><td>${r.si ?? '—'}</td><td>${r.res.group ?? '—'}</td><td>${statusText(r.res)}</td><td>${esc(r.condition)}</td></tr>`).join('')}
-      </tbody></table></div>` : '<p class="small">記録がありません。</p>'}
+    <section class="stack"><h2>潜水の記録（${live.length}本）</h2>
+      ${rows.length ? `<div class="list">${rows.map(r => diveLine(r, r.res, r.no - 1, '').replace(/(<div class="item-title[^>]*>)/, `$1${esc(r.name)}　`)).join('')}</div>` : '<p class="small">記録がありません。</p>'}
     </section>
-    <section class="stack"><h2>署のパソコンへ送る</h2>
-      <p class="small">CSVファイル（Excelの潜水記録と同じ列の順番）を作ります。「メールなどで送る」を押し、共有先でメールを選んでください。</p>
-      <button class="btn btn-primary btn-big btn-block" data-act="share-csv" ${rows.length ? '' : 'disabled'}>${ic('share-2')}メールなどで送る</button>
-      <div class="stack">
-        <button class="btn" data-act="save-csv" ${rows.length ? '' : 'disabled'}>${ic('download')}ファイルに保存</button>
-        <button class="btn" data-act="copy-csv" ${rows.length ? '' : 'disabled'}>${ic('copy')}文字でコピー</button>
+    ${active ? `<section class="stack"><h2>1. 終了</h2>
+      ${downNow.length ? `<div class="alert">${ic('triangle-alert')}<span>まだ水中の人がいます：${esc(downNow.join('、'))}。浮上を記録してから終了してください。</span></div>` : ''}
+      ${missing.length ? `<div class="alert soft">${ic('info')}<span>${missing.join('・')}が未入力です。「事案の情報を直す」から入れられます。</span></div>` : ''}
+      <button class="btn btn-primary btn-big btn-block" data-act="close-inc" ${downNow.length ? 'disabled' : ''}>${ic('flag')}事案を終了する（${hm(nowISO())}）</button>
+    </section>` : ''}
+    <section class="stack"><h2 id="send-head">${active ? '2. 署へ送る' : '次：署へ送る'}</h2>
+      ${active ? '<p class="small">事案を終了すると送れます（終了時刻もCSVに入ります）。</p>'
+        : `<p class="small">CSVファイル（潜水管理台帳で取り込む形式）を作ります。「メールで送る」を押し、共有先でメールを選んでください。${inc.sentAt ? `<br><b>前回送った日時：${ymd(inc.sentAt)} ${hm(inc.sentAt)}</b>${inc.updatedAt > inc.sentAt ? '（そのあと記録を直しています。もう一度送ってください）' : ''}` : ''}</p>`}
+      <button class="btn ${active ? '' : 'btn-primary'} btn-big btn-block" data-act="share-csv" ${rows.length && !active ? '' : 'disabled'}>${ic('mail')}メールで送る</button>
+      <div class="grid2">
+        <button class="btn" data-act="save-csv" ${rows.length && !active ? '' : 'disabled'}>${ic('download')}保存</button>
+        <button class="btn" data-act="copy-csv" ${rows.length && !active ? '' : 'disabled'}>${ic('copy')}コピー</button>
       </div>
       <textarea class="input small" id="csv-fallback" hidden readonly></textarea>
     </section>
-    <section class="stack">
-      ${inc.status === 'active'
-        ? `<button class="btn btn-big btn-block" data-act="close-inc" ${downNow.length ? 'disabled' : ''}>${ic('flag')}事案を終了する</button>`
-        : `<button class="btn btn-block" data-act="reopen-inc">${ic('rotate-ccw')}記録を再開する</button>`}
-    </section>
+    ${!active ? `<section class="stack"><button class="btn btn-block" data-act="reopen-inc">${ic('rotate-ccw')}記録を再開する</button></section>` : ''}
   </main>`;
 }
 function csvRows(inc) {
@@ -941,27 +1125,41 @@ function csvRows(inc) {
     const res = diverResults(inc, dv);
     dv.dives.forEach((d, k) => {
       const r = res[k];
-      out.push({ ...d, memberId: dv.memberId, name: member(dv.memberId).name, no: k + 1, tank: dv.tank ?? S.settings.tank,
+      out.push({ ...d, memberId: dv.memberId, name: member(dv.memberId).name, no: k + 1, tank: d.tank ?? dv.tank ?? S.settings.tank,
         si: r.siMin != null ? Math.floor(r.siMin) : '', res: r });
     });
   });
   return out.sort((a, b) => String(a.startAt).localeCompare(String(b.startAt)) || String(a.memberId).localeCompare(String(b.memberId)));
 }
+// 列の並びは台帳マクロ（ledger/make_bas.py）の取り込みと対になっている。片方だけ変えない
+const CSV_HEAD = ['日付', '職員番号', '氏名', '区分', '事案・訓練名', '地点', '最大水深(m)', '潜水時間(分)', '前の潜水からの水面休息(分)', 'タンク容量(L)', '開始圧(気圧)', '終了圧(気圧)', '水温(℃)', '透視度(m)', '減圧停止(表の判定)', '体調異常', '指揮者', '備考',
+  '事案ID', '本数', '潜降時刻', '浮上時刻', '表の水深(m)', 'グループ', '残留窒素時間(分)', '合計窒素時間(分)', '最大潜水時間(分)', '修正最大潜水時間(分)', '判定', '5m減圧停止(分)', '潜水表', '海況', '事案備考', '事案開始', '事案終了',
+  '記録ID', '状態', '予定水深(m)', '浮上開始時刻', '安全停止', '浮上停止の水深(m)', '浮上停止の時間(分)', '平均浮上速度(m/分)', '呼吸ガス', '監視員', '1本目扱い', '修正記録', '記録更新日時'];
+function ascentRate(d) {
+  if (!d.ascentAt || !d.maxDepth) return '';
+  const mins = minsBetween(d.ascentAt, d.endAt) - (d.stopMin || 0);
+  return mins > 0 ? Math.round(d.maxDepth / mins * 10) / 10 : '';
+}
 function buildCSV(inc) {
   const t = incidentTable(inc);
-  const head = ['日付', '職員番号', '氏名', '区分', '事案・訓練名', '地点', '最大水深(m)', '潜水時間(分)', '前の潜水からの水面休息(分)', 'タンク容量(L)', '開始圧(気圧)', '終了圧(気圧)', '水温(℃)', '透視度(m)', '減圧停止', '体調異常', '指揮者', '備考',
-    '事案ID', '本数', '潜降時刻', '浮上時刻', '表の水深(m)', 'グループ', '残留窒素時間(分)', '合計窒素時間(分)', '最大潜水時間(分)', '修正最大潜水時間(分)', '判定', '5m減圧停止(分)', '潜水表', '海況', '事案備考', '事案開始', '事案終了'];
-  const q = v => { const s = String(v ?? ''); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const lines = [head.map(q).join(',')];
+  // カンマ・引用符・改行を囲む。= + - @ で始まる文字は、Excelで直接開いても数式にならないよう ' を付ける
+  const q = v => { let s = String(v ?? ''); if (typeof v === 'string' && /^[=+\-@\t]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const num = v => (v == null || v === '' ? '' : Number(v));
+  const lines = [CSV_HEAD.map(q).join(',')];
   csvRows(inc).forEach(r => {
     const x = r.res;
-    lines.push([ymd(r.startAt), r.memberId, r.name, inc.type, inc.title, inc.site, r.maxDepth, r.adt, r.si, r.tank, r.startP, r.endP, inc.waterTemp, inc.visibility,
-      x.status === 'deco' ? '有' : '無', r.condition || '無', inc.commanderId ? member(inc.commanderId).name : '', r.note || '',
-      inc.id, r.no, hm(r.startAt), hm(r.endAt), x.tableDepth ?? '', x.group ?? '', x.rnt ?? '', x.tnt ?? '', x.mdt ?? '', x.amdt ?? '', statusText(x), x.stop5 ?? '', tableLabel(t), inc.sea, inc.memo, `${ymd(inc.createdAt)} ${hm(inc.createdAt)}`, inc.closedAt ? `${ymd(inc.closedAt)} ${hm(inc.closedAt)}` : ''].map(q).join(','));
+    const edits = r.edits?.length ? `${r.edits.length}回・最終 ${ymd(r.edits[r.edits.length - 1].at)} ${hm(r.edits[r.edits.length - 1].at)}` : '';
+    lines.push([ymd(r.startAt), String(r.memberId), r.name, inc.type, inc.title, inc.site, num(r.maxDepth), num(r.adt), r.si, num(r.tank), num(r.startP), num(r.endP), inc.waterTemp, inc.visibility,
+      x.status === 'deco' ? '有' : '無', r.condition || '', inc.commanderId ? member(inc.commanderId).name : '', r.note || '',
+      inc.id, r.no, hm(r.startAt), hm(r.endAt), x.tableDepth ?? '', x.group ?? '', x.rnt ?? '', x.tnt ?? '', x.mdt ?? '', x.amdt ?? '', statusText(x), x.stop5 ?? '', tableLabel(t), inc.sea, inc.memo,
+      `${ymd(inc.createdAt)} ${hm(inc.createdAt)}`, inc.closedAt ? `${ymd(inc.closedAt)} ${hm(inc.closedAt)}` : '',
+      r.id, r.deleted ? '削除' : '記録', num(r.plannedDepth), r.ascentAt ? hm(r.ascentAt) : '', r.safetyStop ? '有' : '無', ...(r.stopMin || r.decoStopDone != null ? [5, num(r.stopMin)] : ['', '']), ascentRate(r),
+      inc.gas ?? '空気', inc.watchId ? member(inc.watchId).name : '', r.treatAsFirst ? '指揮者判断' : '', edits,
+      `${ymd(r.updatedAt || r.endAt)} ${hms(r.updatedAt || r.endAt)}`].map(q).join(','));
   });
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
-const csvName = inc => `潜水記録_${ymdCompact(inc.createdAt)}_${(inc.title || inc.type).replace(/[\\/:*?"<>|\s]/g, '')}.csv`;
+const csvName = inc => `潜水記録_${ymdCompact(inc.createdAt)}_${incTitle(inc).replace(/[\\/:*?"<>|\s]/g, '')}.csv`;
 
 /* ===== 潜水表 ===== */
 let pending = null; // 読み込んだ表（切り替え前）
@@ -978,7 +1176,7 @@ function viewTables() {
         <dt>更新日</dt><dd>${esc(act.data.updatedAt || '—')}</dd>
         <dt>出典</dt><dd>${esc(act.data.source || '—')}</dd>
       </dl>
-      ${(act.data.notes || []).map(n => `<div class="alert soft">${ic('info')}<span>${esc(n)}</span></div>`).join('')}
+      ${(act.data.notes || []).length ? `<ul class="small notes">${act.data.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
       <p class="small">アプリの判定は計算の目安です。ダイブコンピュータと指揮者の判断を優先してください。進行中の事案は、始めたときの表のまま計算します。</p>
     </section>
     <section class="stack"><h2>自動点検（${v.warnings.length}件）</h2>
@@ -986,7 +1184,7 @@ function viewTables() {
         : '<p class="small">足し算の合わない箇所や、並びのおかしい箇所は見つかりませんでした。</p>'}
     </section>
     <section class="stack"><h2>最大潜水時間（1本目）</h2>
-      <div class="tablebox"><table class="t"><thead><tr>${act.data.depths.map(d => `<th>${d}m</th>`).join('')}</tr></thead><tbody><tr>${act.data.depths.map(d => `<td>${act.data.mdt[d]}</td>`).join('')}</tr></tbody></table></div>
+      <div class="tablebox"><table class="t"><thead><tr>${act.data.depths.map(d => `<th>${esc(d)}m</th>`).join('')}</tr></thead><tbody><tr>${act.data.depths.map(d => `<td>${esc(act.data.mdt[d])}</td>`).join('')}</tr></tbody></table></div>
     </section>
     <section class="stack"><h2>表の差し替え</h2>
       <p class="small">Excelから書き出した潜水表ファイル（.json）を読み込みます。点検して、変わる箇所を確かめてから切り替えます。</p>
@@ -1017,13 +1215,13 @@ function pendingBlock() {
 }
 
 /* ===== 計算 ===== */
-let calc = { tank: null, start: null, reserve: null, depth: 18, sac: null };
+let calc = { tank: null, start: null, reserve: null, depth: 15, maxDepth: 18, sac: null };
 function viewCalc() {
   const st = S.settings;
   const c = { tank: calc.tank ?? st.tank, start: calc.start ?? st.startP, reserve: calc.reserve ?? st.reserve, depth: calc.depth, sac: calc.sac ?? st.sac };
   const air = Engine.airMinutes(c.tank, c.start, c.reserve, c.depth, c.sac);
   const t = activeTable().data;
-  const td = Engine.tableDepthFor(t, c.depth);
+  const td = Engine.tableDepthFor(t, calc.maxDepth);
   const ndl = td != null ? t.mdt[td] : null;
   const atm = 1 + Number(c.depth) / 10;
   return `${bar('空気と時間の計算', '', true)}
@@ -1031,18 +1229,20 @@ function viewCalc() {
     <section class="stack">
       <div class="grid2">
         <label class="field"><span>タンク容量（L）</span><input class="input num" data-calc="tank" inputmode="decimal" value="${esc(c.tank)}"></label>
-        <label class="field"><span>平均水深（m）</span><input class="input num" data-calc="depth" inputmode="decimal" value="${esc(c.depth)}"></label>
+        <label class="field"><span>最大水深（m）潜水表用</span><input class="input num" data-calc="maxDepth" inputmode="decimal" value="${esc(calc.maxDepth)}"></label>
+        <label class="field"><span>平均水深（m）空気用</span><input class="input num" data-calc="depth" inputmode="decimal" value="${esc(c.depth)}"></label>
         <label class="field"><span>開始圧（気圧）</span><input class="input num" data-calc="start" inputmode="numeric" value="${esc(c.start)}"></label>
         <label class="field"><span>残しておく圧（気圧）</span><input class="input num" data-calc="reserve" inputmode="numeric" value="${esc(c.reserve)}"></label>
         <label class="field"><span>水面での空気消費（L/分）</span><input class="input num" data-calc="sac" inputmode="decimal" value="${esc(c.sac)}"></label>
       </div>
     </section>
     <section class="stack" id="calc-out">
+      <div class="verdict">${ic('clock')}<span>潜れる時間 <span class="num">${air == null || ndl == null ? '—' : Math.min(Math.floor(air), ndl)}</span>分</span></div>
       <div class="result">
         <div><b>${air == null ? '—' : Math.floor(air)}</b><span>空気で潜れる時間（分）</span></div>
         <div><b>${ndl ?? '—'}</b><span>潜水表の上限（${td ?? '—'}m・1本目）</span></div>
-        <div><b>${air == null || ndl == null ? '—' : Math.min(Math.floor(air), ndl)}</b><span>短い方（分）</span></div>
       </div>
+      <p class="small">短い方を表示しています。反復潜水の上限は、潜水員ボードで確かめてください。</p>
       ${air != null ? `<div class="stack">
         <h2>計算のしかた</h2>
         <div class="list">
@@ -1088,15 +1288,17 @@ function viewSettings() {
       <div class="chips">${[['auto', '端末に合わせる'], ['light', '明るい'], ['dark', '暗い']].map(([v, l]) => `<button class="chip" data-act="theme" data-v="${v}" aria-pressed="${st.theme === v}">${ic('check')}${l}</button>`).join('')}</div>
     </section>
     <section class="stack"><h2>データの控え</h2>
-      <p class="small">端末の故障や機種変更に備えて、すべての記録をファイルに控えます。</p>
+      <p class="small">記録はこのスマホの中だけにあります。端末の故障や機種変更に備えて、月に1回はすべての記録をファイルに控え、署のパソコンなど端末の外に保管してください。<br>
+      最後に控えを作った日：<b>${st.lastBackup ? `${ymd(st.lastBackup)} ${hm(st.lastBackup)}` : 'まだありません'}</b>${persisted === false ? '<br>この端末では、空き容量が少ないと記録が消される設定です。ホーム画面に追加して使ってください。' : ''}</p>
       <div class="grid2">
         <button class="btn" data-act="backup">${ic('download')}控えを作る</button>
         <label class="btn">${ic('upload')}控えから戻す<input type="file" id="restore-file" accept=".json,application/json" hidden></label>
       </div>
     </section>
     <section class="stack"><h2>すべての記録を消す</h2>
-      <p class="small">元に戻せません。消す前に「控えを作る」を押してください。確認のため「削除」と入力します。</p>
-      <div class="row"><input class="input" id="wipe" style="flex:1;min-width:8rem" placeholder="削除" value="${esc(confirmWipe)}"><button class="btn" data-act="wipe" ${confirmWipe === '削除' ? '' : 'disabled'}>${ic('trash-2')}すべて消す</button></div>
+      <p class="small">この端末の記録を消します。元に戻せません。メールで送ったCSVと控えのファイルは消えません。</p>
+      <label class="field"><span>確認のため「削除」と入力</span><input class="input" id="wipe" value="${esc(confirmWipe)}" autocomplete="off"></label>
+      <button class="btn" data-act="wipe" ${confirmWipe === '削除' ? '' : 'disabled'}>${ic('trash-2')}すべて消す</button>
     </section>
     <p class="small">潜水現場記録 v${APP_VERSION}・潜水表 ${esc(tableLabel(activeTable()))}</p>
   </main>`;
@@ -1110,10 +1312,17 @@ function tick() {
     el.textContent = el.dataset.mode === 'hm' ? hmText((now - from) / 60000) : clockText(now - from);
   });
   document.querySelectorAll('[data-remain-from]').forEach(el => {
-    const lim = Number(el.dataset.limit);
-    if (!el.dataset.limit) { el.textContent = ''; return; }
-    const left = lim - (now - new Date(el.dataset.remainFrom).getTime()) / 60000;
-    el.innerHTML = left >= 0 ? `・残り <b class="num">${Math.floor(left)}分</b>${left <= 5 ? ' <b>まもなく上限</b>' : ''}` : `・<b>上限を ${Math.ceil(-left)}分 超過</b>`;
+    const from = new Date(el.dataset.remainFrom).getTime();
+    const stop = el.dataset.stop ? new Date(el.dataset.stop).getTime() : null;
+    const used = ((stop ?? now) - from) / 60000;
+    if (!el.dataset.limit) { el.className = 'remain'; el.innerHTML = stop ? `潜水時間 <b class="num">${Math.ceil(used)}分</b>（浮上開始まで）` : ''; return; }
+    const left = Number(el.dataset.limit) - used;
+    let cls = 'remain', html;
+    if (stop) html = `潜水時間 <b class="num">${Math.ceil(used)}分</b>（浮上開始まで）${left < 0 ? `・<b>上限を ${Math.ceil(-left)}分 超えました</b>` : ''}`;
+    else if (left < 0) { cls += ' over'; html = `${ic('triangle-alert')}上限超過 <b class="num">${Math.ceil(-left)}分</b>`; }
+    else if (left <= 5) { cls += ' warn'; html = `${ic('triangle-alert')}残り <b class="num">${Math.floor(left)}分</b>・まもなく上限`; }
+    else html = `残り <b class="num">${Math.floor(left)}分</b>`;
+    el.className = cls; el.innerHTML = html;
   });
   document.querySelectorAll('[data-now]').forEach(el => el.textContent = hm(nowISO()));
 }
@@ -1169,19 +1378,22 @@ document.addEventListener('click', async e => {
   const I = el.dataset.i != null ? Number(el.dataset.i) : null;
 
   switch (act) {
+    case 'reload': location.reload(); break;
     case 'back': history.length > 1 ? history.back() : go('home'); break;
     case 'go': if (view.name === 'new') readDraft(); if (el.dataset.to === 'new') draft = null; go(el.dataset.to); break;
     case 'open-inc': { const x = S.incidents.find(i => i.id === el.dataset.id); go(x.status === 'active' ? 'board' : 'summary', { incidentId: x.id }); break; }
     case 'go-summary': go('summary', { incidentId: inc.id }); break;
-    case 'undo': if (undoSnap) { S = JSON.parse(undoSnap); undoSnap = null; save(); $('#toast').hidden = true; sheet = null; render(); toast('元に戻しました'); } break;
+    case 'undo': if (undoSnap) { S = JSON.parse(undoSnap); undoSnap = null; saved(); $('#toast').hidden = true; sheet = null; render(); toast('元に戻しました'); } break;
     case 'sheet-close': closeSheet(); break;
     case 'sheet-close-back': if (e.target === el) closeSheet(); break;
     case 'sheet': openSheet(el.dataset.sheet, { i: I, k: el.dataset.k != null ? Number(el.dataset.k) : null }); break;
-    case 'clear-sample':
+    case 'clear-sample': {
       snapshot();
+      const ids = S.members.filter(m => m.sample).map(m => m.id);
       S.members = S.members.filter(m => !m.sample);
-      S.incidents = S.incidents.filter(i => !i.sample);
-      save(); render(); toast('見本を消しました', true); break;
+      S.incidents = S.incidents.filter(i => !i.sample && !(ids.includes(i.commanderId) || ids.includes(i.watchId) || i.divers.some(d => ids.includes(d.memberId))));
+      saved(); sheet = null; render(); toast('見本を消しました', true); break;
+    }
 
     /* 新しい事案 */
     case 'draft-type': readDraft(); draft.type = el.dataset.v; render(); break;
@@ -1189,10 +1401,11 @@ document.addEventListener('click', async e => {
     case 'start-inc': {
       readDraft();
       const now0 = nowISO();
-      const x = { id: `${ymdCompact(now0)}-${hm(now0).replace(':', '')}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`, createdAt: now0, type: draft.type, title: draft.title, site: draft.site, commanderId: draft.commanderId, memo: '', waterTemp: '', visibility: '', sea: '',
-        strict: draft.strict, status: 'active', closedAt: null, tableId: activeTable().id,
+      const tb = activeTable();
+      const x = { id: `${ymdCompact(now0)}-${hm(now0).replace(':', '')}-${uid().replace(/[^0-9a-z]/gi, '').slice(0, 6).toUpperCase()}`, createdAt: now0, updatedAt: now0, type: draft.type, title: draft.title, site: draft.site, commanderId: draft.commanderId, watchId: draft.watchId, gas: draft.gas || '空気', memo: '', waterTemp: '', visibility: '', sea: '',
+        strict: draft.strict, status: 'active', closedAt: null, tableId: tb.id, tableSnap: tb.data,
         divers: draft.divers.map(id => ({ memberId: id, tank: S.settings.tank, sac: S.settings.sac, current: null, nextFirst: false, dives: [] })) };
-      S.incidents.push(x); save(); draft = null;
+      S.incidents.push(x); saved(); draft = null;
       view = { name: 'board', incidentId: x.id };
       try { history.replaceState({ view }, ''); } catch (er) {}
       render(); toast('記録を始めました'); break;
@@ -1204,24 +1417,50 @@ document.addEventListener('click', async e => {
       readDownInputs();
       const dv = inc.divers[sheet.i];
       snapshot();
-      dv.tank = Number(sheet.tank) || dv.tank;
-      dv.current = { startAt: nowISO(), plannedDepth: sheet.depth, startP: sheet.startP === '' ? null : Number(sheet.startP) };
-      save(); sheet = null; render(); toast(`${member(dv.memberId).name}　潜降 ${hm(dv.current.startAt)}`, true); break;
+      const sp = numOrBlank(sheet.startP), tk = numOrBlank(sheet.tank);
+      if (Number.isNaN(sp) || Number.isNaN(tk)) { toast('開始圧とタンク容量は数字で入れてください'); break; }
+      dv.tank = tk || dv.tank;
+      dv.current = { startAt: nowISO(), plannedDepth: sheet.depth, startP: sp === '' ? null : sp, tank: dv.tank };
+      touch(inc); saved(); sheet = null; render(); toast(`${member(dv.memberId).name}　潜降 ${hm(dv.current.startAt)}`, true); break;
     }
-    case 'next-first': { const dv = inc.divers[I]; snapshot(); dv.nextFirst = true; save(); if (sheet) renderSheet(); render(); toast('次の潜水を1本目として扱います', true); break; }
-    case 'next-first-off': { const dv = inc.divers[I]; dv.nextFirst = false; save(); renderSheet(); render(); break; }
+    case 'ascent-undo': { const dv = inc.divers[I]; snapshot(); dv.current.ascentAt = null; touch(inc); saved(); render(); toast('浮上開始を取り消しました'); break; }
+    case 'ascent': {
+      const dv = inc.divers[I]; snapshot();
+      dv.current.ascentAt = nowISO();
+      touch(inc); saved(); render(); toast(`${member(dv.memberId).name}　浮上開始 ${hm(dv.current.ascentAt)}`, true); break;
+    }
+    case 'next-first': { const dv = inc.divers[I]; snapshot(); dv.nextFirst = true; saved(); if (sheet) renderSheet(); render(); toast('次の潜水を1本目として扱います', true); break; }
+    case 'next-first-off': { const dv = inc.divers[I]; dv.nextFirst = false; saved(); renderSheet(); render(); break; }
 
     /* 浮上 */
     case 'up-cond': readUpInputs(); sheet.cond = el.dataset.v; renderSheet(); break;
+    case 'up-depth': readUpInputs(); sheet.maxDepth = el.dataset.v; renderSheet(); break;
+    case 'up-safety': readUpInputs(); sheet.safety = el.dataset.v; renderSheet(); break;
     case 'do-up': {
       readUpInputs();
       const dv = inc.divers[sheet.i], c = dv.current;
-      if (sheet.maxDepth === '' || sheet.adt === '') { toast('最大水深と潜水時間を入れてください'); break; }
+      const u = upDefaults(inc, dv);
+      if (!sheet.adtTouched) sheet.adt = String(u.adt);
+      const depth = numOrBlank(sheet.maxDepth), adt = numOrBlank(sheet.adt), endP = numOrBlank(sheet.endP), deco = numOrBlank(sheet.decoStop);
+      const r = upResult(inc, dv);
+      // 画面を開いたまま時間がたって判定が変わったら、描き直して確かめてもらう
+      if (r.status !== sheet.shown) { renderSheet(); toast('時間がたって判定が変わりました。確かめてから記録してください'); break; }
+      const msg = !(depth > 0) ? '最大水深を数字で入れてください'
+        : !(adt >= 1) ? '潜水時間を1分以上の数字で入れてください'
+        : u.elapsed > 720 ? '潜降から水面まで12時間を超えています。時刻を確かめてください'
+        : adt > u.elapsed + 1 ? `潜水時間が、潜降から水面までの時間（${u.elapsed}分）より長くなっています`
+        : u.ascentAt && (u.ascentAt < c.startAt || u.ascentAt > u.endAt) ? '浮上開始の時刻が、潜降と水面の間に入っていません'
+        : Number.isNaN(endP) ? '終了圧は数字で入れてください'
+        : !sheet.safety ? '安全停止の「有」か「無」を選んでください'
+        : !sheet.cond ? '体調異常の「無」か「有」を選んでください'
+        : r.status === 'deco' && !(deco >= 0 && deco !== '') ? '5mで実際に止まった時間を入れてください' : '';
+      if (msg) { toast(msg); break; }
+      const stopMin = r.status === 'deco' ? deco : (sheet.safety === '有' ? u.stopMin : 0);
       snapshot();
-      dv.dives.push({ id: uid(), startAt: c.startAt, endAt: sheet.endAt, plannedDepth: c.plannedDepth, startP: c.startP, endP: sheet.endP === '' ? null : Number(sheet.endP),
-        maxDepth: Number(sheet.maxDepth), adt: Number(sheet.adt), safetyStop: sheet.safety, condition: sheet.cond, note: sheet.cond === '有' ? sheet.note : '', treatAsFirst: !!dv.nextFirst });
+      dv.dives.push({ id: uid(), startAt: c.startAt, ascentAt: u.ascentAt, endAt: u.endAt, plannedDepth: c.plannedDepth, tank: c.tank ?? dv.tank, startP: c.startP, endP: endP === '' ? null : endP,
+        updatedAt: nowISO(), maxDepth: depth, adt, safetyStop: sheet.safety === '有', stopMin: stopMin || 0, decoStopDone: r.status === 'deco' ? deco : null, condition: sheet.cond, note: sheet.note, treatAsFirst: !!dv.nextFirst });
       dv.nextFirst = false; dv.current = null;
-      save(); sheet = null; render(); toast(`${member(dv.memberId).name}　浮上 ${hm(dv.dives[dv.dives.length - 1].endAt)}`, true); break;
+      touch(inc); saved(); sheet = null; render(); toast(`${member(dv.memberId).name}　浮上 ${hm(u.endAt)}`, true); break;
     }
 
     /* 修正 */
@@ -1230,81 +1469,111 @@ document.addEventListener('click', async e => {
       const dv = inc.divers[sheet.i], d = dv.dives[sheet.k];
       const st = isoFromHM(d.startAt, $('#e-start').value), en = isoFromHM(d.startAt, $('#e-end').value);
       if (!st || !en) { toast('時刻を「時:分」で入れてください'); break; }
+      const vals = ['#e-depth', '#e-adt', '#e-startp', '#e-endp'].map(id => numOrBlank($(id).value));
+      if (vals.some(Number.isNaN)) { toast('水深・時間・圧は数字で入れてください'); break; }
+      if (!(vals[0] > 0) || !(vals[1] >= 1)) { toast('最大水深と潜水時間を入れてください'); break; }
+      const why = $('#e-why').value.trim();
+      if (!why) { toast('直す理由を入れてください'); break; }
+      const ns = $('#e-start').value !== hm(d.startAt) ? st : d.startAt;
+      let ne = $('#e-end').value !== hm(d.endAt) ? en : d.endAt;
+      if (new Date(ne) <= new Date(ns)) ne = new Date(new Date(ne).getTime() + 86400000).toISOString();
+      const span = minsBetween(ns, ne);
+      if (span > 720) { toast('潜降から水面まで12時間を超えます。時刻を確かめてください'); break; }
+      if (vals[1] > Math.ceil(span) + 1) { toast(`潜水時間が、潜降から水面までの時間（${Math.ceil(span)}分）より長くなっています`); break; }
       snapshot();
-      d.startAt = st; d.endAt = new Date(en) < new Date(st) ? new Date(new Date(en).getTime() + 86400000).toISOString() : en;
-      const num = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
-      d.maxDepth = num('#e-depth'); d.adt = num('#e-adt'); d.startP = num('#e-startp'); d.endP = num('#e-endp');
-      d.condition = sheet.cond ?? d.condition; d.note = $('#e-note').value.trim(); d.treatAsFirst = $('#e-first').checked;
-      save(); sheet = { name: 'diver', i: sheet.i }; render(); toast('修正しました', true); break;
+      const before = diveSummary(d);
+      // 時刻を変えていなければ、秒まで元のまま残す
+      d.startAt = ns; d.endAt = ne;
+      if (d.ascentAt && (d.ascentAt < d.startAt || d.ascentAt > d.endAt)) d.ascentAt = null;
+      [d.maxDepth, d.adt, d.startP, d.endP] = vals.map(v => (v === '' ? null : v));
+      d.condition = sheet.cond ?? d.condition; d.note = $('#e-note').value.trim();
+      (d.edits ||= []).push({ at: nowISO(), why, before }); d.updatedAt = nowISO();
+      touch(inc); saved(); sheet = { name: 'diver', i: sheet.i }; render(); toast('修正しました', true); break;
     }
     case 'delete-dive': {
+      const why = $('#e-why')?.value.trim();
+      if (!why) { toast('削除する理由を入れてください'); $('#e-why')?.focus(); break; }
       const i = sheet.i; snapshot();
-      inc.divers[i].dives.splice(sheet.k, 1); save(); sheet = { name: 'diver', i }; render(); toast('記録を削除しました', true); break;
+      const d = inc.divers[i].dives[sheet.k];
+      d.deleted = true; d.updatedAt = nowISO(); (d.edits ||= []).push({ at: nowISO(), why: `削除：${why}`, before: diveSummary(d) });
+      touch(inc); saved(); sheet = { name: 'diver', i }; render(); toast('記録を削除しました', true); break;
     }
-    case 'add-diver': snapshot(); inc.divers.push({ memberId: el.dataset.v, tank: S.settings.tank, sac: S.settings.sac, current: null, nextFirst: false, dives: [] }); save(); sheet = null; render(); toast(`${member(el.dataset.v).name}を追加しました`, true); break;
-    case 'remove-diver': snapshot(); inc.divers.splice(I, 1); save(); sheet = null; render(); toast('潜水員を外しました', true); break;
+    case 'add-diver': snapshot(); inc.divers.push({ memberId: el.dataset.v, tank: S.settings.tank, sac: S.settings.sac, current: null, nextFirst: false, dives: [] }); saved(); sheet = null; render(); toast(`${member(el.dataset.v).name}を追加しました`, true); break;
+    case 'remove-diver': snapshot(); inc.divers.splice(I, 1); saved(); sheet = null; render(); toast('潜水員を外しました', true); break;
 
     /* 事案 */
     case 'inc-type': readIncInputsToSheet(); sheet.type = el.dataset.v; renderSheet(); restoreIncInputs(); break;
     case 'save-inc': {
       snapshot();
       inc.type = sheet.type ?? inc.type; inc.title = $('#i-title').value.trim(); inc.site = $('#i-site').value.trim(); inc.commanderId = $('#i-cmd').value;
-      inc.waterTemp = $('#i-temp').value.trim(); inc.visibility = $('#i-vis').value.trim(); inc.sea = $('#i-sea').value.trim(); inc.memo = $('#i-memo').value.trim();
-      save(); sheet = null; render(); toast('事案の情報を保存しました', true); break;
+      inc.watchId = $('#i-watch').value; inc.gas = $('#i-gas').value.trim() || '空気';
+      inc.waterTemp = toHalf($('#i-temp').value); inc.visibility = toHalf($('#i-vis').value); inc.sea = $('#i-sea').value.trim(); inc.memo = $('#i-memo').value.trim();
+      touch(inc); saved(); sheet = null; render(); toast('事案の情報を保存しました', true); break;
     }
-    case 'delete-inc': snapshot(); S.incidents = S.incidents.filter(i => i !== inc); save(); go('home'); toast('事案を削除しました', true); break;
-    case 'close-inc': snapshot(); inc.status = 'closed'; inc.closedAt = nowISO(); save(); render(); toast('事案を終了しました', true); break;
-    case 'reopen-inc': inc.status = 'active'; save(); go('board', { incidentId: inc.id }); break;
+    case 'delete-inc': snapshot(); S.incidents = S.incidents.filter(i => i !== inc); saved(); go('home'); toast('事案を削除しました', true); break;
+    case 'close-inc': snapshot(); inc.status = 'closed'; inc.closedAt = nowISO(); touch(inc); saved(); render(); $('#send-head')?.scrollIntoView({ block: 'start' }); break;
+    case 'reopen-inc': inc.status = 'active'; touch(inc); saved(); go('board', { incidentId: inc.id }); break;
 
     /* 書き出し */
     case 'share-csv': {
       const text = buildCSV(inc), name = csvName(inc);
       const r = await shareText(name, text, 'text/csv');
-      if (r === 'shared') toast('送る画面を開きました');
-      else if (r === 'unsupported') { if (downloadText(name, text, 'text/csv')) toast('共有できないため、ファイルに保存しました'); else { showFallback(text); toast('この画面では送れないため、下に文字で表示しました'); } }
+      if (r === 'shared') { markSent(inc); toast('送る画面を開きました。メールを送ったか確かめてください'); }
+      else if (r === 'unsupported') { if (downloadText(name, text, 'text/csv')) { markSent(inc); toast('共有できないため、ファイルに保存しました。メールに添付してください'); } else { showFallback(text); toast('この画面では送れないため、下に文字で表示しました'); } }
       break;
     }
-    case 'save-csv': { const text = buildCSV(inc); if (downloadText(csvName(inc), text, 'text/csv')) toast('ファイルに保存しました'); else { showFallback(text); toast('この画面では保存できないため、下に文字で表示しました'); } break; }
+    case 'save-csv': { const text = buildCSV(inc); if (downloadText(csvName(inc), text, 'text/csv')) { markSent(inc); toast('ファイルに保存しました'); } else { showFallback(text); toast('この画面では保存できないため、下に文字で表示しました'); } break; }
     case 'copy-csv': {
-      const text = buildCSV(inc).replace(/^﻿/, '');
-      try { await navigator.clipboard.writeText(text); toast('CSVをコピーしました'); } catch (er) { showFallback(text); toast('下の欄を選んでコピーしてください'); }
+      const text = buildCSV(inc).replace(/^\ufeff/, '');
+      try { await navigator.clipboard.writeText(text); markSent(inc); toast('CSVをコピーしました'); } catch (er) { showFallback(text); toast('下の欄を選んでコピーしてください'); }
       break;
     }
 
     /* 潜水表 */
-    case 'use-table': S.tables.activeId = el.dataset.id; save(); render(); toast('潜水表を切り替えました（新しい事案から使います）'); break;
-    case 'del-table': snapshot(); S.tables.list = S.tables.list.filter(t => t.id !== el.dataset.id); save(); render(); toast('版を削除しました', true); break;
+    case 'use-table': S.tables.activeId = el.dataset.id; saved(); render(); toast('潜水表を切り替えました（新しい事案から使います）'); break;
+    case 'del-table': snapshot(); S.tables.list = S.tables.list.filter(t => t.id !== el.dataset.id); saved(); render(); toast('版を削除しました', true); break;
     case 'cancel-table': pending = null; render(); break;
     case 'apply-table': {
       const id = `import:${pending.data.version}:${Date.now()}`;
       S.tables.list.push({ id, importedAt: nowISO(), data: pending.data });
-      S.tables.activeId = id; pending = null; save(); render(); toast('潜水表を切り替えました（新しい事案から使います）'); break;
+      S.tables.activeId = id; pending = null; saved(); render(); toast('潜水表を切り替えました（新しい事案から使います）'); break;
     }
     case 'export-table': { const t = activeTable().data; downloadText(`潜水表_${t.version}.json`, JSON.stringify(t, null, 1), 'application/json') ? toast('潜水表を書き出しました') : toast('この環境では保存できません'); break; }
 
     /* 設定 */
     case 'add-member': {
-      const id = $('#m-id').value.trim(), name = $('#m-name').value.trim();
+      const id = toHalf($('#m-id').value), name = $('#m-name').value.trim();
       if (!id || !name) { toast('職員番号と氏名を入れてください'); break; }
       if (S.members.some(m => m.id === id)) { toast('同じ職員番号がすでにあります'); break; }
-      S.members.push({ id, name }); save(); render(); toast(`${name}を登録しました`); break;
+      S.members.push({ id, name }); saved(); render(); toast(`${name}を登録しました`); break;
     }
     case 'bulk-member': {
       const lines = $('#m-bulk').value.split(/\r?\n/).map(l => l.split(/[,\t]/).map(s => s.trim())).filter(p => p[0] && p[1]);
-      let add = 0;
-      lines.forEach(([id, name]) => { if (!S.members.some(m => m.id === id) && /^\w+$/.test(id)) { S.members.push({ id, name }); add++; } });
-      save(); render(); toast(`${add}人を登録しました`); break;
+      let add = 0; const skip = [];
+      lines.forEach(([id, name]) => { id = toHalf(id); if (!/^[0-9A-Za-z_-]+$/.test(id)) skip.push(`${id}（番号の形）`); else if (S.members.some(m => m.id === id)) skip.push(`${id}（登録済み）`); else { S.members.push({ id, name }); add++; } });
+      saved(); render(); toast(`${add}人を登録しました${skip.length ? `。登録しなかった行：${skip.slice(0, 5).join('、')}${skip.length > 5 ? ` ほか${skip.length - 5}行` : ''}` : ''}`); break;
     }
     case 'del-member': {
       const id = el.dataset.id;
       if (S.incidents.some(i => i.status === 'active' && i.divers.some(d => d.memberId === id))) { toast('進行中の事案に入っているため削除できません'); break; }
-      snapshot(); S.members = S.members.filter(m => m.id !== id); save(); render(); toast('隊員を削除しました', true); break;
+      snapshot(); S.members = S.members.filter(m => m.id !== id); saved(); render(); toast('隊員を削除しました', true); break;
     }
-    case 'theme': S.settings.theme = el.dataset.v; save(); render(); break;
-    case 'backup': downloadText(`潜水現場記録_控え_${ymdCompact(nowISO())}.json`, JSON.stringify(S), 'application/json') ? toast('控えを作りました') : toast('この環境では保存できません'); break;
-    case 'wipe': if (confirmWipe === '削除') { localStorage.removeItem(LS_KEY); S = { ...sampleState(), members: [], incidents: [] }; confirmWipe = ''; save(); go('home'); toast('すべての記録を消しました'); } break;
+    case 'theme': S.settings.theme = el.dataset.v; saved(); render(); break;
+    case 'backup': {
+      const name = `潜水現場記録_控え_${ymdCompact(nowISO())}.json`, text = JSON.stringify(S);
+      const r = await shareText(name, text, 'application/json');
+      if (r === 'shared' || (r === 'unsupported' && downloadText(name, text, 'application/json'))) { S.settings.lastBackup = nowISO(); saved(); render(); toast('控えを作りました。署のパソコンなど、この端末の外に保管してください'); }
+      else if (r !== 'cancel') toast('この環境では保存できません');
+      break;
+    }
+    case 'wipe': if (confirmWipe === '削除') { localStorage.removeItem(LS_KEY); S = { ...sampleState(), members: [], incidents: [] }; confirmWipe = ''; saved(); go('home'); toast('すべての記録を消しました'); } break;
   }
 });
+
+function touch(inc) { if (inc) inc.updatedAt = nowISO(); }
+function markSent(inc) { inc.sentAt = nowISO(); saved(); render(); }
+// 保存して、失敗したらその場で知らせる
+function saved() { if (!save()) setTimeout(() => toast('保存できませんでした。この記録は端末に残っていません'), 0); return storageOK; }
 
 /* 入力値をシートの状態へ */
 function readDownInputs() { if (!sheet) return; sheet.startP = $('#d-startp')?.value.trim() ?? sheet.startP; sheet.tank = $('#d-tank')?.value.trim() ?? sheet.tank; }
@@ -1312,19 +1581,19 @@ function readUpInputs() {
   if (!sheet) return;
   sheet.maxDepth = $('#u-depth')?.value.trim() ?? sheet.maxDepth; sheet.adt = $('#u-adt')?.value.trim() ?? sheet.adt;
   sheet.endP = $('#u-endp')?.value.trim() ?? sheet.endP; sheet.note = $('#u-note')?.value.trim() ?? sheet.note;
-  const sf = $('#u-safety'); if (sf) sheet.safety = sf.checked;
+  sheet.decoStop = $('#u-deco')?.value.trim() ?? sheet.decoStop;
 }
 let editBuf = null, incBuf = null;
 function readEditInputsToSheet() { editBuf = ['#e-start', '#e-end', '#e-depth', '#e-adt', '#e-startp', '#e-endp', '#e-note'].map(id => [id, $(id)?.value]); editBuf.push(['#e-first', $('#e-first')?.checked]); }
 function restoreEditInputs() { (editBuf || []).forEach(([id, v]) => { const el = $(id); if (!el) return; if (id === '#e-first') el.checked = v; else el.value = v; }); }
-function readIncInputsToSheet() { incBuf = ['#i-title', '#i-site', '#i-cmd', '#i-temp', '#i-vis', '#i-sea', '#i-memo'].map(id => [id, $(id)?.value]); }
+function readIncInputsToSheet() { incBuf = ['#i-title', '#i-site', '#i-cmd', '#i-watch', '#i-gas', '#i-temp', '#i-vis', '#i-sea', '#i-memo'].map(id => [id, $(id)?.value]); }
 function restoreIncInputs() { (incBuf || []).forEach(([id, v]) => { const el = $(id); if (el) el.value = v; }); }
 
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.id === 'wipe') { confirmWipe = t.value.trim(); const b = document.querySelector('[data-act="wipe"]'); if (b) b.disabled = confirmWipe !== '削除'; return; }
-  if (t.dataset.calc) { calc[t.dataset.calc] = t.value === '' ? null : Number(t.value); const out = $('#calc-out'); if (out) { const tmp = document.createElement('div'); tmp.innerHTML = viewCalc(); out.replaceWith(tmp.querySelector('#calc-out')); } return; }
-  if (t.dataset.set) { const v = Number(t.value); if (isFinite(v) && t.value !== '') { S.settings[t.dataset.set] = v; save(); } return; }
+  if (t.dataset.calc) { const v = numOrBlank(t.value); calc[t.dataset.calc] = v === '' || Number.isNaN(v) ? null : v; const out = $('#calc-out'); if (out) { const tmp = document.createElement('div'); tmp.innerHTML = viewCalc(); out.replaceWith(tmp.querySelector('#calc-out')); } return; }
+  if (t.dataset.set) { const v = numOrBlank(t.value); if (v !== '' && isFinite(v) && v > 0) { S.settings[t.dataset.set] = v; saved(); } return; }
   if (sheet?.name === 'down' && (t.id === 'd-startp' || t.id === 'd-tank')) {
     readDownInputs();
     const inc = curInc(), dv = inc.divers[sheet.i];
@@ -1335,16 +1604,23 @@ document.addEventListener('input', e => {
   }
   if (sheet?.name === 'up' && t.hasAttribute('data-live')) {
     readUpInputs();
-    if (t.id === 'u-safety') { const mins = sheet.elapsed - (sheet.safety ? (incidentTable(curInc()).data.rules?.safetyStopMinutes ?? 3) : 0); sheet.adt = String(Math.max(1, mins)); const a = $('#u-adt'); if (a) a.value = sheet.adt; }
-    const inc = curInc(), dv = inc.divers[sheet.i], c = dv.current, tb = incidentTable(inc).data;
-    const prev = diverResults(inc, dv);
-    const r = Engine.computeDive(tb, prev[prev.length - 1] || null, { maxDepth: sheet.maxDepth === '' ? null : Number(sheet.maxDepth), adt: sheet.adt === '' ? null : Number(sheet.adt), startAt: c.startAt, endAt: sheet.endAt, treatAsFirst: dv.nextFirst }, { strict: inc.strict });
-    $('#u-result').innerHTML = resultBlock(r);
+    const inc = curInc(), dv = inc.divers[sheet.i], c = dv.current;
+    if (t.id === 'u-adt') sheet.adtTouched = true;
+    const later = v => (new Date(v) < new Date(c.startAt) ? new Date(new Date(v).getTime() + 86400000).toISOString() : v);
+    if (t.id === 'u-end') { const v = isoFromHM(c.startAt, t.value); if (v) { sheet.endTouched = true; sheet.endAt = later(v); } }
+    if (t.id === 'u-asc') { const v = isoFromHM(c.startAt, t.value); sheet.ascentTouched = true; sheet.ascentAt = v ? later(v) : null; }
+    if ((t.id === 'u-end' || t.id === 'u-asc') && !sheet.adtTouched) { sheet.adt = String(upDefaults(inc, dv).adt); const a = $('#u-adt'); if (a) a.value = sheet.adt; }
+    const r = upResult(inc, dv);
+    sheet.shown = r.status;
+    if ((r.status === 'deco') !== !!$('#u-deco')) {
+      // 減圧が必要かどうかで入力欄が変わるので、入力位置を保ったまま描き直す
+      const id = t.id, pos = t.selectionStart; renderSheet();
+      const n = $('#' + id); if (n) { n.focus(); try { if (pos != null) n.setSelectionRange(pos, pos); } catch (er) {} }
+    } else $('#u-result').innerHTML = resultBlock(r);
   }
 });
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.id === 'u-safety') t.dispatchEvent(new Event('input', { bubbles: true }));
   if (t.id === 'table-file') readFile(t, text => {
     try {
       const data = JSON.parse(text.replace(/^\ufeff/, ''));
@@ -1354,17 +1630,31 @@ document.addEventListener('change', e => {
     render();
   });
   if (t.id === 'restore-file') readFile(t, text => {
-    try { const s = JSON.parse(text.replace(/^\ufeff/, '')); if (!s || s.v !== 1 || !Array.isArray(s.incidents)) throw 0; snapshot(); S = s; save(); go('home'); toast('控えから戻しました', true); }
+    try { const s = JSON.parse(text.replace(/^\ufeff/, '')); if (!validBackup(s)) throw 0; snapshot(); S = s; S.settings = { lastBackup: null, ...S.settings }; saved(); go('home'); toast('控えから戻しました', true); }
     catch (er) { toast('控えのファイルではありません'); }
   });
 });
+// 控えのファイルの形を確かめる（壊れた・細工したファイルで画面が崩れないように）
+function validBackup(s) {
+  const str = v => typeof v === 'string', okId = v => str(v) && /^[0-9A-Za-z_:.\-]+$/.test(v);
+  return !!s && s.v === 1 && s.settings && typeof s.settings === 'object' && s.tables && Array.isArray(s.tables.list)
+    && Array.isArray(s.members) && s.members.every(m => m && okId(m.id) && str(m.name))
+    && Array.isArray(s.incidents) && s.incidents.every(i => i && okId(i.id) && Array.isArray(i.divers) && i.divers.every(d => d && Array.isArray(d.dives)))
+    && s.tables.list.every(t => t && okId(t.id) && Engine.validate(t.data).errors.length === 0);
+}
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet) closeSheet(); });
 
 /* ---------- 起動 ---------- */
 save();
 render();
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|anthropic/.test(location.hostname)) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then(reg => reg.update?.()).catch(() => {});
+  // 新しい版が入ったら知らせる（記録中に勝手に読み込み直さない）
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    updateReady = true; render();
+  });
 }
 })();
 

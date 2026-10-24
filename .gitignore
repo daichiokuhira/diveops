@@ -9,3 +9,11 @@ node_modules/
 *.csv
 *実データ*
 *控え*.json
+# 署で使う台帳（実データ入り）を入れない。配布用の release/ だけは例外
+*.xlsx
+*.xlsm
+!release/*.xlsx
+*.bak
+# 台帳のマクロが作る経歴簿・報告書のPDF（氏名入り）
+出力/
+*.pdf

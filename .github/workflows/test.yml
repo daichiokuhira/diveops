@@ -13,5 +13,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install openpyxl
+      - run: pip install openpyxl playwright
       - run: npm test
+      # docs/ がソースから作り直したものと一致しているか（手で直していない・ビルドし忘れていないか）
+      - run: npm run build:app && git diff --exit-code -- docs
+      - run: python -m playwright install --with-deps chromium
+      - run: python tests/e2e.py

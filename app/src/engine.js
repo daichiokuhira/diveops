@@ -59,14 +59,25 @@ const Engine = (() => {
    */
   function computeDive(table, prev, dive, opts = {}) {
     const r = { warnings: [], status: 'ok', stop5: null, incoming: null, siMin: null, continued: false };
-    const adt = dive.adt === '' || dive.adt == null ? null : Number(dive.adt);
-    let td = tableDepthFor(table, dive.maxDepth);
+    let adt = dive.adt === '' || dive.adt == null ? null : Number(dive.adt);
+    const depthIn = dive.maxDepth === '' || dive.maxDepth == null ? null : Number(dive.maxDepth);
+    // 数字でない・0以下の値は判定しない（甘い判定を出さないため）
+    if (adt != null && !(isFinite(adt) && adt > 0)) {
+      r.warnings.push({ level: 'stop', text: '潜水時間は1分以上の数字で入れてください。' });
+      adt = null;
+    }
+    if (depthIn != null && !(isFinite(depthIn) && depthIn > 0)) {
+      r.warnings.push({ level: 'stop', text: '最大水深は0より大きい数字で入れてください。' });
+      r.status = 'na'; r.tableDepth = null;
+      return r;
+    }
+    let td = tableDepthFor(table, depthIn);
     let first = !prev || dive.treatAsFirst;
     let noAmdt = false;
 
-    if (dive.maxDepth != null && dive.maxDepth !== '' && td == null) {
+    if (depthIn != null && td == null) {
       r.status = 'out';
-      r.warnings.push({ level: 'stop', text: `最大水深 ${dive.maxDepth}m は表の範囲（${table.depths[table.depths.length - 1]}mまで）を超えています。` });
+      r.warnings.push({ level: 'stop', text: `最大水深 ${depthIn}m は表の範囲（${table.depths[table.depths.length - 1]}mまで）を超えています。` });
     }
     if (adt == null || td == null) {
       if (r.status === 'ok') r.status = 'na';
@@ -79,7 +90,7 @@ const Engine = (() => {
       rnt = 0;
     } else {
       r.siMin = prev.endAt && dive.startAt ? (new Date(dive.startAt) - new Date(prev.endAt)) / 60000 : null;
-      let si = r.siMin == null ? { status: 'unknown' } : (prev.group ? siGroup(table, prev.group, r.siMin) : { status: 'noprev' });
+      let si = r.siMin == null || isNaN(r.siMin) ? { status: 'unknown' } : r.siMin < 0 ? { status: 'negative' } : (prev.group ? siGroup(table, prev.group, r.siMin) : { status: 'noprev' });
       const clear = table.rules?.clearAfterMinutes;
       if (clear && r.siMin != null && r.siMin > clear) {
         first = true; si = { status: 'cleared' };
@@ -109,7 +120,8 @@ const Engine = (() => {
           over: `水面休息が表の範囲（${si.maxHi}分まで）を超えました。1本目として扱うかは指揮者が判断してください。`,
           gap: '水面休息表に該当する時間帯がありません。表を確認してください。',
           noprev: '前の潜水のグループが出ていないため、自動計算できません。',
-          unknown: '前の潜水の時刻が分からないため、水面休息を計算できません。'
+          unknown: '前の潜水の時刻が分からないため、水面休息を計算できません。',
+          negative: 'この潜水の潜降時刻が、前の潜水の浮上時刻より前になっています。時刻を直してください。'
         }[si.status];
         r.warnings.push({ level: 'stop', text: msg, canReset: si.status === 'over' });
       }
@@ -119,7 +131,9 @@ const Engine = (() => {
     r.mdt = table.mdt[String(td)] ?? null;
     const avoid = table.rules?.avoidRepetitiveDeeperThan;
     if (!first && avoid && td > avoid) r.warnings.push({ level: 'warn', text: `${avoid}mより深い反復潜水は避けるよう、潜水表に記載があります。` });
-    r.amdt = first ? r.mdt : (r.continued ? (r.mdt != null ? r.mdt - rnt : null) : amdt);
+    if (!first && (prev.status === 'deco' || prev.status === 'out')) r.warnings.push({ level: 'warn', text: '減圧停止が必要だった（または表の範囲外の）潜水の後の反復潜水です。指揮者が判断してください。' });
+    if (!first && !r.continued && prev.tableDepth != null && td > prev.tableDepth) r.warnings.push({ level: 'warn', text: `前の潜水（${prev.tableDepth}m）より深い反復潜水です。深い潜水を先にするのが原則です。` });
+    r.amdt = first ? r.mdt : (r.continued ? (r.mdt != null ? Math.max(0, r.mdt - rnt) : null) : amdt);
     if (r.status === 'out') { r.rnt = rnt; return r; }
 
     r.rnt = rnt;
@@ -137,6 +151,12 @@ const Engine = (() => {
       r.status = 'deco';
       r.stop5 = deco.stop5;
       r.warnings.push({ level: 'stop', text: `減圧停止が必要です。水深5mで${deco.stop5}分止まってください（合計窒素時間 ${r.tnt}分・グループ${g}）。` });
+      // 実際に止まった時間が足りないときは、次の潜水を計算しない（24時間は潜らない扱い）
+      const done = dive.decoStopDone == null || dive.decoStopDone === '' ? null : Number(dive.decoStopDone);
+      if (done != null && !(done >= deco.stop5)) {
+        r.omitted = true; r.group = null;
+        r.warnings.push({ level: 'stop', text: `減圧停止が足りません（必要 ${deco.stop5}分・実際 ${isFinite(done) ? done : '—'}分）。24時間は潜らず、体調を観察してください。次の潜水は計算しません。` });
+      }
       if (r.tnt > deco.limit) {
         r.status = 'out';
         r.warnings.push({ level: 'stop', text: `合計窒素時間 ${r.tnt}分 は減圧停止表の上限 ${deco.limit}分 を超えています。表では判断できません。` });
@@ -155,11 +175,23 @@ const Engine = (() => {
     return r;
   }
 
+  // 1段階厳しくしても減圧停止にならない、合計窒素時間の上限
+  function strictTntCap(table, depth) {
+    const cuts = table.groups[String(depth)] || [], mdt = table.mdt[String(depth)] ?? 0;
+    let cap = 0;
+    for (const [mx, g] of cuts) {
+      const s = stricterGroup(table, depth, g);
+      if (mx <= mdt && s && !table.deco[`${depth}-${s}`]) cap = mx;
+    }
+    return cap;
+  }
+
   // ある時刻に潜り始めた場合、水深ごとに何分潜れるか
   function allowance(table, prev, atTime, opts = {}) {
     let incoming = null, first = !prev, note = null, siMin = null;
     if (prev && !opts.forceFirst) {
-      siMin = (new Date(atTime) - new Date(prev.endAt)) / 60000;
+      siMin = prev.endAt ? (new Date(atTime) - new Date(prev.endAt)) / 60000 : NaN;
+      if (!(siMin >= 0)) return { ok: false, siMin, note: '前の潜水の浮上時刻が分からないか、時刻の順番が合いません。' };
       const clear = table.rules?.clearAfterMinutes;
       if (clear && siMin > clear) { first = true; note = `水面休息が${Math.round(clear / 60)}時間を超えたため、1本目として計算しています。`; }
       else {
@@ -173,10 +205,18 @@ const Engine = (() => {
     } else if (prev && opts.forceFirst) { first = true; }
     const avoid = table.rules?.avoidRepetitiveDeeperThan;
     const rows = table.depths.map(d => {
-      if (first) return { depth: d, limit: table.mdt[String(d)] ?? null, rnt: 0 };
-      const rnt = val(table.rnt, incoming, d), am = val(table.amdt, incoming, d);
-      const avoidHere = !!(avoid && d > avoid);
-      return { depth: d, limit: rnt == null ? 0 : (am ?? 0), rnt, noData: rnt == null || am == null, avoid: avoidHere };
+      let row;
+      if (first) row = { depth: d, limit: table.mdt[String(d)] ?? null, rnt: 0 };
+      else {
+        const rnt = val(table.rnt, incoming, d), am = val(table.amdt, incoming, d);
+        row = { depth: d, limit: rnt == null ? 0 : (am ?? 0), rnt, noData: rnt == null || am == null, avoid: !!(avoid && d > avoid) };
+      }
+      if (opts.strict && row.limit) {
+        // 1段階厳しくしたとき：浮上後のグループが減圧の側に入らない合計窒素時間まで
+        const cap = strictTntCap(table, d);
+        row.limit = Math.max(0, Math.min(row.limit, cap - (row.rnt || 0)));
+      }
+      return row;
     });
     return { ok: true, first, incoming, siMin, rows, note };
   }
@@ -189,6 +229,15 @@ const Engine = (() => {
     if (t.format !== 'dive-table/1') errors.push('形式の印（format: dive-table/1）がありません。');
     if (!t.name || !t.version) errors.push('表の名前（name）と版（version）が必要です。');
     if (!Array.isArray(t.depths) || !t.depths.length) { errors.push('水深の一覧（depths）がありません。'); return { errors, warnings }; }
+    if (!t.depths.every(d => isNum(d) && d > 0)) { errors.push('水深の一覧（depths）に数字でない値があります。'); return { errors, warnings }; }
+    // 決まりごと（rules）：甘い判定になる値は受け付けない
+    const R = t.rules;
+    if (!R || typeof R !== 'object') errors.push('決まりごと（rules）がありません。');
+    else {
+      const need = { minSurfaceInterval: [10, 60], clearAfterMinutes: [1440, 2880], safetyStopMinutes: [3, 5], safetyStopDepth: [3, 6], maxAscentRate: [1, 18] };
+      for (const [k, [lo, hi]] of Object.entries(need)) if (!isNum(R[k]) || R[k] < lo || R[k] > hi) errors.push(`決まりごと「${k}」は ${lo}〜${hi} の数字にしてください（今は ${R[k] ?? 'なし'}）。`);
+      if (R.avoidRepetitiveDeeperThan != null && !isNum(R.avoidRepetitiveDeeperThan)) errors.push('決まりごと「avoidRepetitiveDeeperThan」が数字ではありません。');
+    }
     for (let i = 1; i < t.depths.length; i++) if (!(t.depths[i] > t.depths[i - 1])) errors.push(`水深の並びが浅い順になっていません（${t.depths[i - 1]}m → ${t.depths[i]}m）。`);
     for (const k of ['mdt', 'groups', 'rnt', 'amdt', 'surfaceInterval', 'deco']) if (!t[k] || typeof t[k] !== 'object') errors.push(`「${k}」の表がありません。`);
     if (errors.length) return { errors, warnings };
@@ -259,6 +308,9 @@ const Engine = (() => {
     const out = [];
     const cmp = (label, x, y) => { if (JSON.stringify(x) !== JSON.stringify(y)) out.push({ label, from: x ?? '—', to: y ?? '—' }); };
     if (!a) return out;
+    const rk = [...new Set([...Object.keys(a.rules || {}), ...Object.keys(b.rules || {})])].sort();
+    for (const k of rk) cmp(`決まりごと ${k}`, a.rules?.[k], b.rules?.[k]);
+    cmp('照合', a.verified ? `済み（${a.verifiedBy || ''}）` : '前', b.verified ? `済み（${b.verifiedBy || ''}）` : '前');
     const depths = [...new Set([...(a.depths || []), ...(b.depths || [])])].sort((x, y) => x - y);
     for (const d of depths) cmp(`最大潜水時間 ${d}m`, a.mdt?.[d], b.mdt?.[d]);
     for (const d of depths) cmp(`グループ表 ${d}m`, (a.groups?.[d] || []).map(c => c.join('')).join(' '), (b.groups?.[d] || []).map(c => c.join('')).join(' '));
@@ -273,6 +325,6 @@ const Engine = (() => {
     return out;
   }
 
-  return { tableDepthFor, groupFor, siGroup, airMinutes, computeDive, allowance, validate, diff };
+  return { tableDepthFor, groupFor, siGroup, airMinutes, computeDive, allowance, strictTntCap, validate, diff };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
