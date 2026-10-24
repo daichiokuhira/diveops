@@ -1,7 +1,8 @@
 const E = require('../app/src/engine.js'); const t = require('../app/tables/naui-2022.json');
 let ok = 0, ng = 0; const ex = (l, g, w) => { const p = JSON.stringify(g) === JSON.stringify(w); p ? ok++ : ng++; console.log(p ? 'OK ' : 'NG ', l, g, p ? '' : 'want ' + JSON.stringify(w)); };
 const T0 = Date.UTC(2026, 0, 1); const iso = m => new Date(T0 + m * 60000).toISOString();
-const first = (d, adt) => { const r = E.computeDive(t, null, { maxDepth: d, adt, startAt: iso(0), endAt: iso(adt + 3) }); r.endAt = iso(adt + 3); return r; };
+// 表の判定だけを見る（実停止時間は入力中の扱い）
+const first = (d, adt) => { const r = E.computeDive(t, null, { maxDepth: d, adt, startAt: iso(0), endAt: iso(adt + 3), pendingStop: true }); r.endAt = iso(adt + 3); return r; };
 // 解説記事の例：グループGで15mに45分潜るには、グループDまで戻る（休息2:38〜3:29）。Gのままなら15mは26分
 const g = first(18, 39); ex('18m 39分 → G', g.group, 'G');
 const at = m => E.allowance(t, g, iso(39 + 3 + m));
@@ -39,7 +40,7 @@ for (const r of sa.rows) {
   const a = dive(null, r.depth, r.limit, 0, { opts: { strict: true } });
   ex(`厳しく・${r.depth}m ${r.limit}分 → 減圧にならない`, a.status === 'ok', true);
 }
-ex('厳しく・27m 25分 → J・減圧5分', (r => [r.group, r.stop5])(dive(null, 27, 25, 0, { opts: { strict: true } })), ['J', 5]);
+ex('厳しく・27m 25分 → J・減圧5分', (r => [r.group, r.stop5])(dive(null, 27, 25, 0, { pendingStop: true, opts: { strict: true } })), ['J', 5]);
 const sr = E.allowance(t, g, iso(39 + 3 + 60), { strict: true }), nr = E.allowance(t, g, iso(39 + 3 + 60));
 for (const r of sr.rows) if (r.limit) {
   const a = dive(g, r.depth, r.limit, 39 + 3 + 60, { opts: { strict: true } });
@@ -58,6 +59,9 @@ ex('減圧停止を省いた後の潜水は計算しない', dive(om, 12, 10, 26
 ex('減圧停止を省いて24時間後は1本目', E.allowance(t, om, iso(26 + 3 + 1441)).first, true);
 ex('減圧停止を満たした → グループJ', dive(null, 27, 26, 0, { decoStopDone: 5 }).group, 'J');
 ex('減圧潜水の後の反復に注意', dive(dive(null, 27, 26, 0, { decoStopDone: 5 }), 12, 10, 26 + 3 + 120).warnings.some(w => /減圧停止が必要だった/.test(w.text)), true);
+ex('実停止の記録なしで減圧 → 不足扱い', dive(null, 27, 26, 0).omitted, true);
+ex('入力中は不足扱いにしない', !!dive(null, 27, 26, 0, { pendingStop: true }).omitted, false);
+ex('あとで減圧に直した潜水（安全停止3分だけ）→ 不足', dive(null, 30, 23, 0, { stopMin: 3, decoStopDone: null }).omitted, true);
 const v = E.validate(t); ex('点検 エラー0・注意0', [v.errors.length, v.warnings.length], [0, 0]);
 console.log(`${ok}件 OK / ${ng}件 NG`);
 if (ng) process.exit(1);

@@ -142,6 +142,17 @@ async def main():
         await pg.click('[data-act="up-cond"][data-v="有"]')
         await pg.fill('#u-note', '右耳の違和感, 浮上後に回復')
         await pg.click('[data-act="do-up"]')
+        # あとで減圧が必要な潜水に直し、5mの停止が足りなければ止める（確かめたら元に戻す）
+        await pg.click('[data-act="sheet"][data-sheet="diver"][data-i="1"]')
+        await pg.click('[data-sheet="edit"][data-k="0"]')
+        sh, sm = map(int, (await pg.input_value('#e-start')).split(':')); sm += 30; sh = (sh + sm // 60) % 24; sm %= 60
+        await pg.fill('#e-end', f'{sh:02d}:{sm:02d}')
+        await pg.fill('#e-depth', '30'); await pg.fill('#e-adt', '23'); await pg.fill('#e-stop', '3'); await pg.fill('#e-why', '試験')
+        await pg.click('[data-act="save-edit"]')
+        await pg.click('[data-act="sheet-close"]')
+        ex('直して減圧になり停止不足 → 止める', await pg.locator('text=減圧停止が足りません').count() >= 1, True)
+        await pg.click('[data-act="undo"]')
+        ex('元に戻す', await pg.locator('text=減圧停止が足りません').count(), 0)
 
         # 終了の手続き：終了するまで送れない
         await pg.click('[data-act="go-summary"]')

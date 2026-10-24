@@ -205,7 +205,7 @@ def clear_row(wd, r, rid, ts):
 
 
 # ---- 本体 ----
-def new_counts(): return dict(added=0, updated=0, deleted=0, skipped=0, inc_added=0, bad=0, notes=[])
+def new_counts(): return dict(added=0, updated=0, deleted=0, skipped=0, inc_added=0, inc_updated=0, bad=0, notes=[])
 
 def import_one(wb, path, n, now='取り込み試験'):
     """ImportOne。n は件数の dict（足し込む）。取り込まなかったときは理由の文字列を返す"""
@@ -220,7 +220,10 @@ def import_one(wb, path, n, now='取り込み試験'):
     wd, wk = wb['潜水記録'], wb['事案']
     ids, keys_all, keys_noid = {}, {}, {}
     for r in range(D_FIRST, D_LAST + 1): reindex(wd, r, ids, keys_all, keys_noid)
-    incs = {cell_str(wk.cell(r, 1)) for r in range(K_FIRST, K_LAST + 1) if cell_str(wk.cell(r, 1)) != ''}
+    incs = {}
+    for r in range(K_FIRST, K_LAST + 1):
+        if cell_str(wk.cell(r, 1)) != '': incs.setdefault(cell_str(wk.cell(r, 1)), r)
+    inc_done = set()   # このファイルで追加・更新した事案
     next_d = next_empty_row(wd, D_FIRST, D_LAST, NEXT_COLS)
     next_k = next_empty_row(wk, K_FIRST, K_LAST, [1, 2])
     for v in rows[1:]:
@@ -231,7 +234,7 @@ def import_one(wb, path, n, now='取り込み試験'):
         ts = fld(v, hdr, '記録更新日時', 't')
         key = f"{iid}|{fld(v, hdr, '職員番号', 't')}|{fld(v, hdr, '本数', 't')}"
         found = find_row(rid, key, ids, keys_all, keys_noid)
-        live = False
+        live = False; changed = False
         if found > 0 and not is_newer(ts, cell_str(wd.cell(found, C_TS))):
             n['skipped'] += 1
             live = cell_str(wd.cell(found, 19)) != ''   # 削除の印の行なら、事案も足さない
@@ -251,17 +254,23 @@ def import_one(wb, path, n, now='取り込み試験'):
             if row_same(wd, found, v, hdr): n['skipped'] += 1
             else:
                 unindex(wd, found, ids, keys_all, keys_noid); write_row(wd, found, v, hdr, False)
-                reindex(wd, found, ids, keys_all, keys_noid); n['updated'] += 1
+                reindex(wd, found, ids, keys_all, keys_noid); n['updated'] += 1; changed = True
         else:
             if next_d == 0: raise LimitError(f'潜水記録の上限（{D_LAST - D_FIRST + 1}件）に達しました。')
-            write_row(wd, next_d, v, hdr, True); reindex(wd, next_d, ids, keys_all, keys_noid); n['added'] += 1; live = True
+            write_row(wd, next_d, v, hdr, True); reindex(wd, next_d, ids, keys_all, keys_noid); n['added'] += 1; live = True; changed = True
             next_d = 0 if next_d >= D_LAST else next_d + 1
-        if live and iid != '' and iid not in incs:
-            if next_k == 0: raise LimitError(f'事案の上限（{K_LAST - K_FIRST + 1}件）に達しました。')
-            for nm, col, kind in INC: put_val(wk.cell(next_k, col), fld(v, hdr, nm, kind), kind)
-            put_val(wk.cell(next_k, 16), now, 't')
-            incs.add(iid); n['inc_added'] += 1
-            next_k = 0 if next_k >= K_LAST else next_k + 1
+        if live and iid != '':
+            if iid in incs and changed and iid not in inc_done:
+                # 潜水を追加・更新した事案は、事案の内容もCSVの値で上書き（事案IDと取り込み日時は残す）
+                for nm, col, kind in INC:
+                    if col != 1 and nm in hdr: put_val(wk.cell(incs[iid], col), fld(v, hdr, nm, kind), kind)
+                inc_done.add(iid); n['inc_updated'] += 1
+            elif iid not in incs:
+                if next_k == 0: raise LimitError(f'事案の上限（{K_LAST - K_FIRST + 1}件）に達しました。')
+                for nm, col, kind in INC: put_val(wk.cell(next_k, col), fld(v, hdr, nm, kind), kind)
+                put_val(wk.cell(next_k, 16), now, 't')
+                incs[iid] = next_k; inc_done.add(iid); n['inc_added'] += 1
+                next_k = 0 if next_k >= K_LAST else next_k + 1
     return ''
 
 def import_csv(wb, paths):

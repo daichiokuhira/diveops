@@ -122,6 +122,26 @@ with tempfile.TemporaryDirectory() as td:
     n_v3 = P.import_csv(wb, [write_csv(td / 'v3.csv', v3)])
     ok(n_v3['updated'] == 1 and wd.cell(r1, 18).value == 'アプリで直した', '(順序) もっと新しいCSVは更新する', str(n_v3))
 
+    # 事案の更新：2本送る → 1本目の水深と、事案の指揮者・地点を変え、全行の記録更新日時を新しくして送り直す
+    #  → 2本目のグループ・判定も更新され、事案シートの指揮者・地点も新しい値になる
+    two = [dict(r, **{'事案ID': 'S-20261026', '日付': '2026/10/26', '記録ID': f'rec-inc-{i}', '記録更新日時': '2026/10/26 10:00:00'})
+           for i, r in enumerate([x for x in SAMPLE if x['事案ID'] == 'S-20250514' and x['職員番号'] == '1002'])]
+    ni1 = P.import_csv(wb, [write_csv(td / 'inc1.csv', two)])
+    ok(ni1['added'] == 2 and ni1['inc_added'] == 1 and ni1['inc_updated'] == 0, '(事案) 2本と事案1件を追加', str(ni1))
+    two2 = copy.deepcopy(two)
+    two2[0]['最大水深(m)'] = 12; two2[1]['グループ'] = 'Z'; two2[1]['判定'] = '表で確認'
+    for r in two2: r.update({'指揮者': '見本 三郎', '地点': '訓練プール', '記録更新日時': '2026/10/26 11:00:00'})
+    ni2 = P.import_csv(wb, [write_csv(td / 'inc2.csv', two2)])
+    kr = [r for r in range(P.K_FIRST, P.K_LAST + 1) if wk.cell(r, 1).value == 'S-20261026']
+    r2 = find('rec-inc-1')[0]
+    ok(ni2['updated'] == 2 and ni2['inc_updated'] == 1 and ni2['inc_added'] == 0, '(事案) 送り直すと2本とも更新・事案更新1件', str(ni2))
+    ok(wd.cell(find('rec-inc-0')[0], 7).value == 12 and wd.cell(r2, 24).value == 'Z' and wd.cell(r2, 29).value == '表で確認', '(事案) 2本目のグループ・判定も更新')
+    ok(len(kr) == 1 and wk.cell(kr[0], 6).value == '見本 三郎' and wk.cell(kr[0], 5).value == '訓練プール' and wk.cell(kr[0], 16).value == '取り込み試験',
+       '(事案) 事案シートの指揮者・地点が新しい値（取り込み日時は残る）')
+    wk.cell(kr[0], 6).value = '署で直した指揮者'
+    ni3 = P.import_csv(wb, [td / 'inc2.csv'])
+    ok(ni3['inc_updated'] == 0 and ni3['updated'] == 0 and wk.cell(kr[0], 6).value == '署で直した指揮者', '(事案) 同じか古いCSVでは事案を変えない', str(ni3))
+
     # (f) 旧形式 35列
     old = [dict(r, **{'事案ID': 'S-20261001', '日付': '2026/10/01', '事案・訓練名': '旧形式の試験'}) for r in SAMPLE[:2]]
     fo = write_csv(td / 'old.csv', old, OLD35)
@@ -180,7 +200,7 @@ with tempfile.TemporaryDirectory() as td:
     ok(not badc and not (marked & used), '(削除の印) 集計・照合に使う列は、印の行では空か空の判定つき', f'集計の列 {sorted(used)} / 問題 {badc}')
     ok(wd2.cell(tr, 1).value is None and wd2.cell(tr, 2).value is None and wd2.cell(tr, 19).value is None, '(削除の印) 日付・職員番号・事案IDが空（本数・経歴簿・報告書・CSV抽出の対象外）')
     ok(wb2['潜水記録'].auto_filter.ref == f"A4:{P.G['layout']['D_LASTCOL']}{D2}", '(7) オートフィルタが最後の列まで', wb2['潜水記録'].auto_filter.ref)
-    ok(n_rows() == start + 3 - 1 + 2 + 1 + 1, '行数の合計', f'{start} → {n_rows()}')
+    ok(n_rows() == start + 3 - 1 + 2 + 2 + 1 + 1, '行数の合計', f'{start} → {n_rows()}')
 
     # VBA と Python 版が1対1か（手続きの名前）
     bas = subprocess.run([sys.executable, 'ledger/make_bas.py', str(td / 'm.bas')], check=True, cwd=ROOT, capture_output=True)

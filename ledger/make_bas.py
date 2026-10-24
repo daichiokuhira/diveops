@@ -73,7 +73,7 @@ End Sub
 ' =============================================================
 Public Sub ImportAppCsv()
     Dim files As Variant, i As Long, note As String, notes As String, msg As String
-    Dim added As Long, updated As Long, deleted As Long, skipped As Long, incAdded As Long, bad As Long
+    Dim added As Long, updated As Long, deleted As Long, skipped As Long, incAdded As Long, incUpdated As Long, bad As Long
     Dim en As Long, ed As String
     On Error GoTo Fail
     files = Application.GetOpenFilename("CSVファイル (*.csv),*.csv", , "アプリから届いたCSVを選ぶ（複数選べます）", , True)
@@ -82,7 +82,7 @@ Public Sub ImportAppCsv()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     For i = LBound(files) To UBound(files)
-        note = ImportOne(CStr(files(i)), added, updated, deleted, skipped, incAdded, bad)
+        note = ImportOne(CStr(files(i)), added, updated, deleted, skipped, incAdded, incUpdated, bad)
         If note <> "" Then notes = notes & vbCrLf & note
     Next i
 Cleanup:
@@ -98,6 +98,7 @@ Cleanup:
     If deleted > 0 Then msg = msg & "／削除 " & deleted & "件（アプリで削除した記録の行を空けた）"
     If skipped > 0 Then msg = msg & vbCrLf & "取り込み済み：" & skipped & "件（台帳と同じか、台帳の方が新しいため変えず）"
     msg = msg & vbCrLf & "事案：追加 " & incAdded & "件"
+    If incUpdated > 0 Then msg = msg & "／事案更新 " & incUpdated & "件（CSVの方が新しい事案の内容で上書き）"
     If bad > 0 Then msg = msg & vbCrLf & "読めなかった行：" & bad & "件"
     If notes <> "" Then msg = msg & vbCrLf & vbCrLf & "取り込まなかったファイル：" & notes
     If notes = "" Then
@@ -113,7 +114,7 @@ Fail:
 End Sub
 
 ' 1つのファイルを取り込む。取り込まなかったときは理由を返す
-Private Function ImportOne(ByVal path As String, ByRef added As Long, ByRef updated As Long, ByRef deleted As Long, ByRef skipped As Long, ByRef incAdded As Long, ByRef bad As Long) As String
+Private Function ImportOne(ByVal path As String, ByRef added As Long, ByRef updated As Long, ByRef deleted As Long, ByRef skipped As Long, ByRef incAdded As Long, ByRef incUpdated As Long, ByRef bad As Long) As String
     Dim rows As Collection, hdr As Object, v As Variant
     Dim r As Long, k As Long, ncol As Long, found As Long
     Set rows = ParseCsv(ReadText(path, "UTF-8"))
@@ -132,19 +133,22 @@ Private Function ImportOne(ByVal path As String, ByRef added As Long, ByRef upda
     Dim wd As Worksheet, wk As Worksheet
     Set wd = ThisWorkbook.Worksheets("潜水記録")
     Set wk = ThisWorkbook.Worksheets("事案")
-    Dim ids As Object, keysAll As Object, keysNoId As Object, incs As Object
+    Dim ids As Object, keysAll As Object, keysNoId As Object, incs As Object, incDone As Object
     Set ids = CreateObject("Scripting.Dictionary")
     Set keysAll = CreateObject("Scripting.Dictionary")
     Set keysNoId = CreateObject("Scripting.Dictionary")
     Set incs = CreateObject("Scripting.Dictionary")
+    Set incDone = CreateObject("Scripting.Dictionary")   ' このファイルで追加・更新した事案
     For r = D_FIRST To D_LAST
         Reindex wd, r, ids, keysAll, keysNoId
     Next r
     For r = K_FIRST To K_LAST
-        If CellStr(wk.Cells(r, 1)) <> "" Then incs(CellStr(wk.Cells(r, 1))) = True
+        If CellStr(wk.Cells(r, 1)) <> "" Then
+            If Not incs.Exists(CellStr(wk.Cells(r, 1))) Then incs(CellStr(wk.Cells(r, 1))) = r
+        End If
     Next r
 
-    Dim nextD As Long, nextK As Long, key As String, iid As String, rid As String, st As String, ts As String, prior As String, live As Boolean
+    Dim nextD As Long, nextK As Long, key As String, iid As String, rid As String, st As String, ts As String, prior As String, live As Boolean, changed As Boolean
     nextD = NextEmptyRow(wd, D_FIRST, D_LAST, Array(__NEXT_COLS__))
     nextK = NextEmptyRow(wk, K_FIRST, K_LAST, Array(1, 2))
     For r = 2 To rows.Count
@@ -159,6 +163,7 @@ Private Function ImportOne(ByVal path As String, ByRef added As Long, ByRef upda
             key = iid & "|" & Fld(v, hdr, "職員番号", "t") & "|" & Fld(v, hdr, "本数", "t")
             found = FindRow(rid, key, ids, keysAll, keysNoId)
             live = False
+            changed = False
             If found > 0 And Not IsNewer(ts, CellStr(wd.Cells(found, C_TS))) Then
                 ' 台帳の方が新しいか同じ。何も変えない（削除の印の行なら、事案も足さない）
                 skipped = skipped + 1
@@ -188,6 +193,7 @@ Private Function ImportOne(ByVal path As String, ByRef added As Long, ByRef upda
                     WriteRow wd, found, v, hdr, False
                     Reindex wd, found, ids, keysAll, keysNoId
                     updated = updated + 1
+                    changed = True
                 End If
             Else
                 If nextD = 0 Then Err.Raise vbObjectError + 2, , "潜水記録の上限（" & (D_LAST - D_FIRST + 1) & "件）に達しました。新しい台帳に分けてください。"
@@ -195,16 +201,25 @@ Private Function ImportOne(ByVal path As String, ByRef added As Long, ByRef upda
                 Reindex wd, nextD, ids, keysAll, keysNoId
                 added = added + 1
                 live = True
+                changed = True
                 nextD = IIf(nextD >= D_LAST, 0, nextD + 1)
             End If
             If live And iid <> "" Then
-                If Not incs.Exists(iid) Then
+                If incs.Exists(iid) And changed And Not incDone.Exists(iid) Then
+                    ' 潜水を追加・更新した（CSVの方が新しい）事案は、事案の内容もCSVの値で上書きする。事案IDと取り込み日時は残す
+                    For k = 0 To N_INC - 1
+                        If IncCol(k) <> 1 And hdr.Exists(IncName(k)) Then PutVal wk.Cells(incs(iid), IncCol(k)), Fld(v, hdr, IncName(k), IncKind(k)), IncKind(k)
+                    Next k
+                    incDone(iid) = True
+                    incUpdated = incUpdated + 1
+                ElseIf Not incs.Exists(iid) Then
                     If nextK = 0 Then Err.Raise vbObjectError + 3, , "事案の上限（" & (K_LAST - K_FIRST + 1) & "件）に達しました。新しい台帳に分けてください。"
                     For k = 0 To N_INC - 1
                         PutVal wk.Cells(nextK, IncCol(k)), Fld(v, hdr, IncName(k), IncKind(k)), IncKind(k)
                     Next k
                     PutVal wk.Cells(nextK, 16), Format(Now, "yyyy/mm/dd hh:nn"), "t"
-                    incs(iid) = True
+                    incs(iid) = nextK
+                    incDone(iid) = True
                     incAdded = incAdded + 1
                     nextK = IIf(nextK >= K_LAST, 0, nextK + 1)
                 End If

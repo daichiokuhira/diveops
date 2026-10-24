@@ -402,7 +402,7 @@ function upDefaults(inc, dv) {
 function upDive(inc, dv) {
   const c = dv.current, dec = numOrBlank(sheet.decoStop);
   return { maxDepth: numOrBlank(sheet.maxDepth) === '' ? null : numOrBlank(sheet.maxDepth), adt: numOrBlank(sheet.adt) === '' ? null : numOrBlank(sheet.adt),
-    startAt: c.startAt, endAt: upDefaults(inc, dv).endAt, treatAsFirst: dv.nextFirst, decoStopDone: dec === '' ? null : dec };
+    startAt: c.startAt, endAt: upDefaults(inc, dv).endAt, treatAsFirst: dv.nextFirst, decoStopDone: dec === '' ? null : dec, pendingStop: dec === '' };
 }
 function upResult(inc, dv) { return Engine.computeDive(incidentTable(inc).data, lastResult(diverResults(inc, dv)), upDive(inc, dv), { strict: inc.strict }); }
 function sheetUp() {
@@ -498,7 +498,9 @@ function sheetEdit() {
     <label class="field"><span>潜水時間（分）</span><input class="input num" id="e-adt" inputmode="numeric" value="${esc(d.adt ?? '')}"></label>
     <label class="field"><span>開始圧（気圧）</span><input class="input num" id="e-startp" inputmode="numeric" value="${esc(d.startP ?? '')}"></label>
     <label class="field"><span>終了圧（気圧）</span><input class="input num" id="e-endp" inputmode="numeric" value="${esc(d.endP ?? '')}"></label>
+    <label class="field"><span>5mで止まった時間（分）</span><input class="input num" id="e-stop" inputmode="numeric" value="${esc(d.decoStopDone ?? d.stopMin ?? '')}"></label>
   </div>
+  <p class="small">減圧停止が必要な判定になる修正では、5mで実際に止まった時間を入れてください。表の停止時間より短いと、次の潜水は計算しません。</p>
   <div class="field"><span>体調異常</span><div class="chips">${['無', '有'].map(v => `<button class="chip" data-act="edit-cond" data-v="${v}" aria-pressed="${(sheet.cond ?? d.condition) === v}">${ic('check')}${v}</button>`).join('')}</div></div>
   <label class="field"><span>備考</span><input class="input" id="e-note" value="${esc(d.note ?? '')}"></label>
   <label class="field"><span>直す・削除する理由<b>必須</b></span><input class="input" id="e-why" placeholder="例：深度計の読み違い"></label>
@@ -507,7 +509,7 @@ function sheetEdit() {
   <hr class="rule">
   <button class="btn btn-quiet" data-act="delete-dive">${ic('trash-2')}この記録を削除（削除した記録も署へ送るCSVに残ります）</button>`;
 }
-const diveSummary = d => `${hm(d.startAt)}→${hm(d.endAt)} ${d.maxDepth ?? '—'}m ${d.adt ?? '—'}分 開始圧${d.startP ?? '—'} 終了圧${d.endP ?? '—'} 体調${d.condition || '—'}`;
+const diveSummary = d => `${hm(d.startAt)}→${hm(d.endAt)} ${d.maxDepth ?? '—'}m ${d.adt ?? '—'}分 開始圧${d.startP ?? '—'} 終了圧${d.endP ?? '—'} 5m停止${d.decoStopDone ?? d.stopMin ?? '—'}分 体調${d.condition || '—'}`;
 
 /* ----- 見本を消す ----- */
 function sheetClearSample() {
@@ -618,6 +620,8 @@ function ascentRate(d) {
   const mins = minsBetween(d.ascentAt, d.endAt) - (d.stopMin || 0);
   return mins > 0 ? Math.round(d.maxDepth / mins * 10) / 10 : '';
 }
+// 前の潜水や事案を直すと後の潜水の計算も変わるので、事案の更新日時と比べて新しい方を記録更新日時にする
+const stamp = list => { const t = list.filter(Boolean).sort().pop(); return t ? `${ymd(t)} ${hms(t)}` : ''; };
 function buildCSV(inc) {
   const t = incidentTable(inc);
   // カンマ・引用符・改行を囲む。= + - @ で始まる文字は、Excelで直接開いても数式にならないよう ' を付ける
@@ -633,7 +637,7 @@ function buildCSV(inc) {
       `${ymd(inc.createdAt)} ${hm(inc.createdAt)}`, inc.closedAt ? `${ymd(inc.closedAt)} ${hm(inc.closedAt)}` : '',
       r.id, r.deleted ? '削除' : '記録', num(r.plannedDepth), r.ascentAt ? hm(r.ascentAt) : '', r.safetyStop ? '有' : '無', ...(r.stopMin || r.decoStopDone != null ? [5, num(r.stopMin)] : ['', '']), ascentRate(r),
       inc.gas ?? '空気', inc.watchId ? member(inc.watchId).name : '', r.treatAsFirst ? '指揮者判断' : '', edits,
-      `${ymd(r.updatedAt || r.endAt)} ${hms(r.updatedAt || r.endAt)}`].map(q).join(','));
+      stamp([r.updatedAt || r.endAt, inc.updatedAt])].map(q).join(','));
   });
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
@@ -907,8 +911,8 @@ document.addEventListener('click', async e => {
       dv.current.ascentAt = nowISO();
       touch(inc); saved(); render(); toast(`${member(dv.memberId).name}　浮上開始 ${hm(dv.current.ascentAt)}`, true); break;
     }
-    case 'next-first': { const dv = inc.divers[I]; snapshot(); dv.nextFirst = true; saved(); if (sheet) renderSheet(); render(); toast('次の潜水を1本目として扱います', true); break; }
-    case 'next-first-off': { const dv = inc.divers[I]; dv.nextFirst = false; saved(); renderSheet(); render(); break; }
+    case 'next-first': { const dv = inc.divers[I]; snapshot(); dv.nextFirst = true; touch(inc); saved(); if (sheet) renderSheet(); render(); toast('次の潜水を1本目として扱います', true); break; }
+    case 'next-first-off': { const dv = inc.divers[I]; dv.nextFirst = false; touch(inc); saved(); renderSheet(); render(); break; }
 
     /* 浮上 */
     case 'up-cond': readUpInputs(); sheet.cond = el.dataset.v; renderSheet(); break;
@@ -947,8 +951,8 @@ document.addEventListener('click', async e => {
       const dv = inc.divers[sheet.i], d = dv.dives[sheet.k];
       const st = isoFromHM(d.startAt, $('#e-start').value), en = isoFromHM(d.startAt, $('#e-end').value);
       if (!st || !en) { toast('時刻を「時:分」で入れてください'); break; }
-      const vals = ['#e-depth', '#e-adt', '#e-startp', '#e-endp'].map(id => numOrBlank($(id).value));
-      if (vals.some(Number.isNaN)) { toast('水深・時間・圧は数字で入れてください'); break; }
+      const vals = ['#e-depth', '#e-adt', '#e-startp', '#e-endp', '#e-stop'].map(id => numOrBlank($(id).value));
+      if (vals.some(Number.isNaN)) { toast('水深・時間・圧・停止時間は数字で入れてください'); break; }
       if (!(vals[0] > 0) || !(vals[1] >= 1)) { toast('最大水深と潜水時間を入れてください'); break; }
       const why = $('#e-why').value.trim();
       if (!why) { toast('直す理由を入れてください'); break; }
@@ -963,7 +967,8 @@ document.addEventListener('click', async e => {
       // 時刻を変えていなければ、秒まで元のまま残す
       d.startAt = ns; d.endAt = ne;
       if (d.ascentAt && (d.ascentAt < d.startAt || d.ascentAt > d.endAt)) d.ascentAt = null;
-      [d.maxDepth, d.adt, d.startP, d.endP] = vals.map(v => (v === '' ? null : v));
+      [d.maxDepth, d.adt, d.startP, d.endP] = vals.slice(0, 4).map(v => (v === '' ? null : v));
+      d.stopMin = vals[4] === '' ? 0 : vals[4]; d.decoStopDone = vals[4] === '' ? null : vals[4];
       d.condition = sheet.cond ?? d.condition; d.note = $('#e-note').value.trim();
       (d.edits ||= []).push({ at: nowISO(), why, before }); d.updatedAt = nowISO();
       touch(inc); saved(); sheet = { name: 'diver', i: sheet.i }; render(); toast('修正しました', true); break;
@@ -976,8 +981,8 @@ document.addEventListener('click', async e => {
       d.deleted = true; d.updatedAt = nowISO(); (d.edits ||= []).push({ at: nowISO(), why: `削除：${why}`, before: diveSummary(d) });
       touch(inc); saved(); sheet = { name: 'diver', i }; render(); toast('記録を削除しました', true); break;
     }
-    case 'add-diver': snapshot(); inc.divers.push({ memberId: el.dataset.v, tank: S.settings.tank, sac: S.settings.sac, current: null, nextFirst: false, dives: [] }); saved(); sheet = null; render(); toast(`${member(el.dataset.v).name}を追加しました`, true); break;
-    case 'remove-diver': snapshot(); inc.divers.splice(I, 1); saved(); sheet = null; render(); toast('潜水員を外しました', true); break;
+    case 'add-diver': snapshot(); inc.divers.push({ memberId: el.dataset.v, tank: S.settings.tank, sac: S.settings.sac, current: null, nextFirst: false, dives: [] }); touch(inc); saved(); sheet = null; render(); toast(`${member(el.dataset.v).name}を追加しました`, true); break;
+    case 'remove-diver': snapshot(); inc.divers.splice(I, 1); touch(inc); saved(); sheet = null; render(); toast('潜水員を外しました', true); break;
 
     /* 事案 */
     case 'inc-type': readIncInputsToSheet(); sheet.type = el.dataset.v; renderSheet(); restoreIncInputs(); break;

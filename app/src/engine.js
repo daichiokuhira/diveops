@@ -152,7 +152,9 @@ const Engine = (() => {
       r.stop5 = deco.stop5;
       r.warnings.push({ level: 'stop', text: `減圧停止が必要です。水深5mで${deco.stop5}分止まってください（合計窒素時間 ${r.tnt}分・グループ${g}）。` });
       // 実際に止まった時間が足りないときは、次の潜水を計算しない（24時間は潜らない扱い）
-      const done = dive.decoStopDone == null || dive.decoStopDone === '' ? null : Number(dive.decoStopDone);
+      // 実停止時間：入力値 → なければ記録した5mでの停止時間 → どちらもなければ0分（不足扱い）。入力中（pendingStop）は判定しない
+      const raw = dive.decoStopDone != null && dive.decoStopDone !== '' ? dive.decoStopDone : (dive.stopMin != null ? dive.stopMin : (dive.pendingStop ? null : 0));
+      const done = raw == null ? null : Number(raw);
       if (done != null && !(done >= deco.stop5)) {
         r.omitted = true; r.group = null;
         r.warnings.push({ level: 'stop', text: `減圧停止が足りません（必要 ${deco.stop5}分・実際 ${isFinite(done) ? done : '—'}分）。24時間は潜らず、体調を観察してください。次の潜水は計算しません。` });
