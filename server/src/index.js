@@ -8,12 +8,15 @@
  * 同じ文書は updatedAt（端末で変更した日時）の新しい方を正とする。
  * 権限：隊員の追加・異動・資格の確認は隊長（leader）と管理者（admin）。隊長の指名は管理者だけ。
  */
-const KINDS = ['member', 'qual', 'incident', 'diver', 'dive'];
+import { DocSchema } from './schema.js';
+const KINDS = DocSchema.kinds;
+const MAX_BODY = 2 * 1024 * 1024;
+const FAIL_LIMIT_IP = 50; // 署の回線など、同じ場所から大勢がログインしても止めすぎない
 const TOKEN_DAYS = 30;
 const MAX_DATA = 64 * 1024;
 const MAX_CHANGES = 500;
 const PAGE = 500;
-const FAIL_WINDOW_MS = 15 * 60 * 1000, FAIL_LIMIT = 10;
+const FAIL_WINDOW_MS = 15 * 60 * 1000, FAIL_LIMIT = 10; // 職員番号ごと
 
 const enc = new TextEncoder();
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -74,18 +77,22 @@ async function auth(req, env) {
   const mem = await memberRow(env, t.sub);
   const role = roleOf(env, t.sub, mem);
   if (role !== 'admin' && (!mem || (mem.status || '在籍') !== '在籍')) return null;
-  return { sub: t.sub, role, name: mem?.name || `職員番号 ${t.sub}` };
+  return { sub: t.sub, role, name: mem?.name || `職員番号 ${t.sub}`, renew: t.exp - Date.now() < 7 * 86400000 };
 }
 
 async function login(req, env) {
   const ip = req.headers.get('CF-Connecting-IP') || 'local';
   const now = Date.now();
   await env.DB.prepare('DELETE FROM login_fail WHERE at < ?').bind(now - FAIL_WINDOW_MS).run();
-  const fails = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_fail WHERE ip = ?').bind(ip).first();
-  if ((fails?.n || 0) >= FAIL_LIMIT) return json({ error: 'ログインの失敗が続いたため、15分ほど待ってから試してください。' }, 429);
   let b; try { b = await req.json(); } catch (e) { b = {}; }
-  const id = String(b.memberId || '').normalize('NFKC').trim();
-  const fail = async () => { await env.DB.prepare('INSERT INTO login_fail (ip, at) VALUES (?, ?)').bind(ip, now).run(); return json({ error: '職員番号かパスコードが違います。' }, 401); };
+  const id = String(b.memberId || '').normalize('NFKC').trim().slice(0, 120);
+  const byId = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_fail WHERE ip = ?').bind('id:' + id).first();
+  const byIp = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_fail WHERE ip = ?').bind('ip:' + ip).first();
+  if ((byId?.n || 0) >= FAIL_LIMIT || (byIp?.n || 0) >= FAIL_LIMIT_IP) return json({ error: 'ログインの失敗が続いたため、15分ほど待ってから試してください。' }, 429);
+  const fail = async () => {
+    await env.DB.batch([env.DB.prepare('INSERT INTO login_fail (ip, at) VALUES (?, ?)').bind('id:' + id, now), env.DB.prepare('INSERT INTO login_fail (ip, at) VALUES (?, ?)').bind('ip:' + ip, now)]);
+    return json({ error: '職員番号かパスコードが違います。名簿に無い場合は、隊長に登録を頼んでください。' }, 401);
+  };
   if (!okId(id) || !env.TEAM_PASSCODE || !sameText(String(b.passcode || ''), env.TEAM_PASSCODE)) return fail();
   const mem = await memberRow(env, id);
   const role = roleOf(env, id, mem);
@@ -104,7 +111,8 @@ function checkChange(user, ch, cur) {
       if (ch.deleted && !leader) return '隊員の削除は隊長だけができます';
       return null;
     case 'qual': {
-      const mine = d.memberId === user.sub && (!old || old.memberId === user.sub);
+      const owner = ch.deleted ? old && old.memberId : d.memberId;
+      const mine = owner === user.sub && (!old || old.memberId === user.sub);
       if (!leader && !mine) return '自分以外の資格・研修は入力できません';
       if (!leader && old && old.confirmedAt) return '確認済みの資格・研修は隊長だけが直せます';
       if (!leader && d.confirmedAt) return '資格の確認は隊長だけができます';
@@ -114,12 +122,28 @@ function checkChange(user, ch, cur) {
   }
 }
 
+// 記録のある潜水員・事案は消させない（潜水中の人や、潜水の記録が消えるのを防ぐ）
+async function guardDelete(env, ch, cur) {
+  if (!ch.deleted || !cur || cur.deleted) return null;
+  if (ch.kind === 'diver') {
+    if (cur.data.current) return '潜水中の潜水員は外せません';
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM docs WHERE kind = 'dive' AND deleted = 0 AND json_extract(data, '$.incidentId') = ? AND json_extract(data, '$.memberId') = ?").bind(cur.data.incidentId, cur.data.memberId).first();
+    if (n.n) return '潜水の記録がある潜水員は外せません';
+  }
+  if (ch.kind === 'incident') {
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM docs WHERE kind IN ('dive', 'diver') AND deleted = 0 AND json_extract(data, '$.incidentId') = ? AND (kind = 'dive' OR json_extract(data, '$.current') IS NOT NULL)").bind(ch.id).first();
+    if (n.n) return '潜水の記録がある事案は消せません';
+  }
+  return null;
+}
 async function sync(req, env, user) {
+  if (Number(req.headers.get('Content-Length') || 0) > MAX_BODY) return json({ error: '一度に送る量が多すぎます。' }, 413);
   let b; try { b = await req.json(); } catch (e) { return json({ error: '形が正しくありません。' }, 400); }
   let since = Number.isInteger(b.since) && b.since >= 0 ? b.since : 0;
   // サーバーの番号より先を指していたら（データベースを作り直したときなど）、最初から送り直す
   const top0 = await env.DB.prepare("SELECT v FROM meta WHERE k = 'seq'").first();
-  if (since > (top0?.v || 0)) since = 0;
+  const reset = since > (top0?.v || 0);
+  if (reset) since = 0;
   const changes = Array.isArray(b.changes) ? b.changes : [];
   if (changes.length > MAX_CHANGES) return json({ error: `一度に送れるのは${MAX_CHANGES}件までです。` }, 413);
   const rejected = [], now = new Date().toISOString();
@@ -128,29 +152,46 @@ async function sync(req, env, user) {
     if (!ch || !KINDS.includes(ch.kind) || !okId(ch.id) || !okIso(ch.updatedAt) || typeof ch.data !== 'object' || ch.data === null || Array.isArray(ch.data)) { rejected.push({ ...key, reason: '形が正しくありません' }); continue; }
     const text = JSON.stringify(ch.data);
     if (text.length > MAX_DATA) { rejected.push({ ...key, reason: '大きすぎます' }); continue; }
+    const cleaned = ch.deleted ? {} : DocSchema.clean(ch.kind, ch.data);
+    if (!cleaned) { rejected.push({ ...key, reason: '形が正しくありません' }); continue; }
     // 端末の時計が大きく進んでいる変更は受け取らない（新しい方が勝つ仕組みを壊さないため）
     if (Date.parse(ch.updatedAt) > Date.now() + 10 * 60 * 1000) { rejected.push({ ...key, reason: '端末の時計が進んでいます。日時を合わせてください' }); continue; }
     const row = await env.DB.prepare('SELECT data, deleted, updated_at FROM docs WHERE kind = ? AND id = ?').bind(ch.kind, ch.id).first();
     const cur = row ? { data: JSON.parse(row.data), deleted: !!row.deleted, updatedAt: row.updated_at } : null;
-    if (cur && cur.updatedAt >= ch.updatedAt) { rejected.push({ ...key, reason: 'stale' }); continue; } // サーバーの方が新しい（端末は次の取得で受け取る）
-    const why = checkChange(user, ch, cur);
+    // 電波のない間の潜降（潜水中の潜水員）は、先に届いた「外す」より優先する（潜水中の人を消さない）
+    const revive = cur && cur.deleted && !ch.deleted && ch.kind === 'diver' && cleaned.current;
+    if (cur && cur.updatedAt >= ch.updatedAt && !revive) { rejected.push({ ...key, reason: 'stale' }); continue; } // サーバーの方が新しい（端末は次の取得で受け取る）
+    const why = checkChange(user, { ...ch, data: cleaned }, cur) || await guardDelete(env, ch, cur);
     if (why) { rejected.push({ ...key, reason: why }); continue; }
-    const data = { ...ch.data };
+    const data = { ...cleaned };
     if (ch.kind === 'qual' && data.confirmedAt && !(cur && cur.data.confirmedAt === data.confirmedAt)) { data.confirmedById = user.sub; data.confirmedBy = user.name; }
     const out = JSON.stringify(data);
-    const s = await env.DB.prepare("UPDATE meta SET v = v + 1 WHERE k = 'seq' RETURNING v").first();
-    await env.DB.batch([
-      env.DB.prepare('INSERT INTO docs (kind, id, data, deleted, updated_at, updated_by, server_at, seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (kind, id) DO UPDATE SET data = excluded.data, deleted = excluded.deleted, updated_at = excluded.updated_at, updated_by = excluded.updated_by, server_at = excluded.server_at, seq = excluded.seq')
-        .bind(ch.kind, ch.id, out, ch.deleted ? 1 : 0, ch.updatedAt, user.sub, now, s.v),
-      env.DB.prepare('INSERT INTO audit (seq, kind, id, deleted, updated_by, server_at, data) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(s.v, ch.kind, ch.id, ch.deleted ? 1 : 0, user.sub, now, out)
+    // 番号を取り、新しい方だけを書き、記録を残す、を1つの処理で行う（2台が同時に送っても古い方が残らない）
+    const stamp = revive ? now : ch.updatedAt;
+    const res = await env.DB.batch([
+      env.DB.prepare("UPDATE meta SET v = v + 1 WHERE k = 'seq'"),
+      env.DB.prepare(`INSERT INTO docs (kind, id, data, deleted, updated_at, updated_by, server_at, seq) VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT v FROM meta WHERE k = 'seq'))
+        ON CONFLICT (kind, id) DO UPDATE SET data = excluded.data, deleted = excluded.deleted, updated_at = excluded.updated_at, updated_by = excluded.updated_by, server_at = excluded.server_at, seq = excluded.seq
+        WHERE excluded.updated_at > docs.updated_at OR (? = 1 AND docs.deleted = 1)`).bind(ch.kind, ch.id, out, ch.deleted ? 1 : 0, stamp, user.sub, now, revive ? 1 : 0),
+      env.DB.prepare(`INSERT INTO audit (seq, kind, id, deleted, updated_by, server_at, data) SELECT v, ?, ?, ?, ?, ?, ? FROM meta WHERE k = 'seq' AND v = (SELECT seq FROM docs WHERE kind = ? AND id = ?)`)
+        .bind(ch.kind, ch.id, ch.deleted ? 1 : 0, user.sub, now, out, ch.kind, ch.id)
     ]);
+    if (!res[1].meta.changes) { rejected.push({ ...key, reason: 'stale' }); continue; }
+    // 潜水員・潜水が届いた事案が消されていたら、事案を戻す（電波のない間の記録を消さない）
+    if (!ch.deleted && (ch.kind === 'diver' || ch.kind === 'dive')) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE meta SET v = v + 1 WHERE k = 'seq'"),
+        env.DB.prepare("UPDATE docs SET deleted = 0, server_at = ?, seq = (SELECT v FROM meta WHERE k = 'seq') WHERE kind = 'incident' AND id = ? AND deleted = 1").bind(now, data.incidentId)
+      ]);
+    }
   }
   const rows = await env.DB.prepare('SELECT kind, id, data, deleted, updated_at, updated_by, seq FROM docs WHERE seq > ? ORDER BY seq LIMIT ?').bind(since, PAGE + 1).all();
   const list = rows.results || [];
   const more = list.length > PAGE;
   const page = list.slice(0, PAGE).map(r => ({ kind: r.kind, id: r.id, data: JSON.parse(r.data), deleted: !!r.deleted, updatedAt: r.updated_at, updatedBy: r.updated_by, seq: r.seq }));
-  const top = await env.DB.prepare("SELECT v FROM meta WHERE k = 'seq'").first();
-  return json({ seq: page.length ? page[page.length - 1].seq : Math.max(since, more ? since : top.v), changes: page, rejected, more, me: { id: user.sub, name: user.name, role: user.role } }, 200);
+  // 期限まで7日を切っていたら、新しい証明を渡す（使っている間は切れない）
+  const token = user.renew ? await issueToken(env, user.sub) : undefined;
+  return json({ seq: page.length ? page[page.length - 1].seq : since, changes: page, rejected, more, reset, me: { id: user.sub, name: user.name, role: user.role }, token, now: new Date().toISOString() }, 200);
 }
 
 export default {

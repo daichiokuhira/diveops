@@ -9,7 +9,9 @@ css = (src/'app.css').read_text()
 import os
 cfg = ROOT/'app'/'config.json'
 API_BASE = os.environ.get('DIVEOPS_API_BASE', json.loads(cfg.read_text()).get('apiBase', '') if cfg.exists() else '')
-js = (src/'icons.js').read_text() + '\n' + (src/'engine.js').read_text() + '\n' + (src/'app.js').read_text().replace('__APP_VERSION__', VERSION).replace("'__API_BASE__'.startsWith('__') ? '' : '__API_BASE__'", json.dumps(API_BASE))
+import re as _re
+schema = _re.sub(r'(?m)^export ', '', (ROOT/'server'/'src'/'schema.js').read_text())  # サーバーと同じ文書の形
+js = (src/'icons.js').read_text() + '\n' + schema + '\n' + (src/'engine.js').read_text() + '\n' + (src/'app.js').read_text().replace('__APP_VERSION__', VERSION).replace("'__API_BASE__'.startsWith('__') ? '' : '__API_BASE__'", json.dumps(API_BASE))
 table = json.dumps(json.loads((tables/'naui-2022.json').read_text()), ensure_ascii=False)
 build = VERSION
 body = f'''<div id="app"></div>

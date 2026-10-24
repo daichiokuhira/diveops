@@ -251,7 +251,7 @@ const curInc = () => S.incidents.find(i => i.id === view.incidentId);
 
 /* ---------- 元に戻す ---------- */
 let undoSnap = null, toastTimer = null;
-function snapshot() { undoSnap = JSON.stringify(S); }
+function snapshot() { undoSnap = JSON.stringify({ ...S, sync: undefined }); }
 function toast(msg, undo = false) {
   const el = $('#toast');
   el.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button class="btn" data-act="undo">${ic('undo-2')}元に戻す</button>` : ''}`;
@@ -269,17 +269,20 @@ function bar(title, sub, back, right = '') {
 let updateReady = false;
 function globalAlerts() {
   const a = [];
+  const stopped = CLOUD && everIn() && !signedIn() ? `<div class="alert row">${ic('triangle-alert')}<span class="spacer">共有が止まっています（ログインの期限切れ・パスコードの変更・在籍の変更など）。記録は続けられます。</span><button class="btn" data-act="relogin">${ic('key-round')}ログインし直す</button></div>` : '';
   const upd = updateReady && view.name !== 'board' ? `<div class="alert soft row">${ic('rotate-ccw')}<span class="spacer">新しい版があります。記録中でなければ更新してください。</span><button class="btn" data-act="reload">更新する</button></div>` : '';
+  const nf = CLOUD ? Object.keys(S.sync?.failed || {}).length : 0;
+  if (nf) a.push(`受け付けられなかった記録が ${nf}件あり、この端末にだけ残っています（${Object.values(S.sync.failed)[0].reason}）。隊長に相談してください。`);
   if (ready && useLS) a.push('この端末では、記録を容量の小さい保存先（localStorage）に置いています。こまめに控えを作ってください。');
   if (!storageOK) a.push('この端末に記録を保存できていません。このまま閉じると記録が消えます。紙にも控え、設定の「控えを作る」を試してください。');
   if (loadNote) a.push(loadNote);
-  return a.length || upd ? `<div class="wrap wrap-alert">${a.map(t => `<div class="alert" role="alert">${ic('triangle-alert')}<span>${esc(t)}</span></div>`).join('')}${upd}</div>` : '';
+  return a.length || upd || stopped ? `<div class="wrap wrap-alert">${stopped}${a.map(t => `<div class="alert" role="alert">${ic('triangle-alert')}<span>${esc(t)}</span></div>`).join('')}${upd}</div>` : '';
 }
 function render() {
   if (!ready) return;
   applyTheme();
   const app = $('#app');
-  const v = CLOUD && !signedIn() ? viewLogin : ({
+  const v = CLOUD && (!everIn() || view.name === 'login') ? viewLogin : ({
     home: viewHome, new: viewNew, board: viewBoard, summary: viewSummary,
     tables: viewTables, settings: viewSettings, calc: viewCalc, records: viewRecords
   }[view.name] || viewHome);
@@ -291,6 +294,8 @@ function render() {
 function renderSheet() {
   const box = $('#sheet');
   if (!sheet) { box.innerHTML = ''; box.hidden = true; document.body.style.overflow = ''; if (sheetOpener?.isConnected) sheetOpener.focus(); sheetOpener = null; return; }
+  const gone = sheetGone();
+  if (gone) { sheet = null; box.innerHTML = ''; box.hidden = true; document.body.style.overflow = ''; toast(gone); return; }
   const fn = { member: sheetMember, down: sheetDown, up: sheetUp, diver: sheetDiver, edit: sheetEdit, addDiver: sheetAddDiver, editInc: sheetEditInc, clearSample: sheetClearSample }[sheet.name];
   const wasOpen = !box.hidden;
   box.innerHTML = `<div class="sheet-back" data-act="sheet-close-back"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${fn()}</div></div>`;
@@ -299,6 +304,17 @@ function renderSheet() {
   document.body.style.overflow = 'hidden';
 }
 let sheetOpener = null;
+const DVof = (inc, mid) => (inc ? inc.divers.find(d => d.memberId === mid) : null);
+// ほかの端末の変更で、開いているシートの相手がいなくなった・状態が変わったら、閉じて知らせる
+function sheetGone() {
+  if (!sheet || !['down', 'up', 'diver', 'edit'].includes(sheet.name)) return '';
+  const inc = curInc(), dv = DVof(inc, sheet.i);
+  if (!inc || !dv) return 'この潜水員は、ほかの端末で事案から外されました';
+  if (sheet.name === 'up' && !dv.current) return 'この潜水員の浮上は、ほかの端末で記録されました';
+  if (sheet.name === 'down' && dv.current) return 'この潜水員の潜降は、ほかの端末で記録されました';
+  if (sheet.name === 'edit' && !dv.dives.some(x => x.id === sheet.k)) return 'この記録は、ほかの端末で変わりました';
+  return '';
+}
 function openSheet(name, extra = {}) { sheetOpener = document.activeElement; sheet = { name, ...extra }; renderSheet(); }
 function closeSheet() { sheet = null; renderSheet(); }
 const sheetHead = t => `<div class="sheet-head"><h1 id="sheet-title" tabindex="-1">${t}</h1><button class="btn btn-icon" data-act="sheet-close" aria-label="閉じる">${ic('x')}</button></div>`;
@@ -306,8 +322,9 @@ const sheetHead = t => `<div class="sheet-head"><h1 id="sheet-title" tabindex="-
 /* ===== ホーム ===== */
 let homeAll = false;
 function viewHome() {
-  const active = S.incidents.filter(i => i.status === 'active');
-  const past = S.incidents.filter(i => i.status !== 'active').sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const live = i => i.status === 'active' || i.divers.some(d => d.current);
+  const active = S.incidents.filter(live);
+  const past = S.incidents.filter(i => !live(i)).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   const t = activeTable();
   const hasSample = S.members.some(m => m.sample) || S.incidents.some(i => i.sample);
   return `${bar('潜水現場記録', '宮古島市消防本部 潜水隊', false, `<button class="btn btn-icon" data-act="go" data-to="settings" aria-label="設定">${ic('settings')}</button>`)}
@@ -407,9 +424,10 @@ function viewBoard() {
     `<button class="btn btn-icon" data-act="sheet" data-sheet="editInc" aria-label="事案の情報">${ic('pencil')}</button>`)}
   <main class="wrap">
     ${inc.status !== 'active' ? `<div class="alert soft">${ic('info')}<span>この事案は終了しています。記録の修正はできます。</span></div>` : ''}
+    ${CLOUD && (navigator.onLine === false || !signedIn() || !S.sync?.lastPullAt || Date.now() - new Date(S.sync.lastPullAt) > 180000) ? `<div class="alert soft">${ic('cloud-off')}<span>ほかの端末の記録が届いていないかもしれません（最終受信 ${S.sync?.lastPullAt ? hm(S.sync.lastPullAt) : 'なし'}）。1人の潜水員は1台で記録してください。</span></div>` : ''}
     ${t.missing ? `<div class="alert">${ic('triangle-alert')}<span>この事案を始めたときの潜水表が見つからないため、使用中の表で計算しています。</span></div>` : ''}
     <section>
-      ${inc.divers.length ? `<div class="list">${inc.divers.map((dv, i) => diverRow(inc, dv, i)).join('')}</div>`
+      ${inc.divers.length ? `<div class="list">${inc.divers.map(dv => diverRow(inc, dv, dv.memberId)).join('')}</div>`
         : `<p>潜水員がまだいません。下の「潜水員を追加」から加えてください。</p>`}
     </section>
     <section class="row">
@@ -435,8 +453,8 @@ function diverRow(inc, dv, i) {
     info = `<div>予定 ${c.plannedDepth ?? '—'}m・上限 <b class="num">${L.lim ?? '—'}分</b>${L.by ? `（${L.by}で決まる）` : '（潜水表で判断できません）'}</div>`;
     info += `<div class="remain" data-remain-from="${esc(c.startAt)}" data-limit="${L.lim ?? ''}" data-stop="${esc(c.ascentAt || '')}"></div>`;
     btn = c.ascentAt
-      ? `<button class="btn btn-primary" data-act="sheet" data-sheet="up" data-i="${i}">${ic('arrow-up-from-line')}水面に着いた</button><button class="btn btn-quiet btn-under" data-act="ascent-undo" data-i="${i}">浮上開始を取り消す</button>`
-      : `<button class="btn btn-primary" data-act="ascent" data-i="${i}">${ic('arrow-up')}浮上開始</button><button class="btn btn-quiet btn-under" data-act="sheet" data-sheet="up" data-i="${i}">もう水面にいる</button>`;
+      ? `<button class="btn btn-primary" data-act="sheet" data-sheet="up" data-i="${esc(i)}">${ic('arrow-up-from-line')}水面に着いた</button><button class="btn btn-quiet btn-under" data-act="ascent-undo" data-i="${esc(i)}">浮上開始を取り消す</button>`
+      : `<button class="btn btn-primary" data-act="ascent" data-i="${esc(i)}">${ic('arrow-up')}浮上開始</button><button class="btn btn-quiet btn-under" data-act="sheet" data-sheet="up" data-i="${esc(i)}">もう水面にいる</button>`;
   } else if (st === 'rest') {
     const al = allowanceFor(inc, dv);
     stateLabel = `<span class="state">${ic('timer')}水面休息</span>`;
@@ -449,18 +467,18 @@ function diverRow(inc, dv, i) {
       info = `<div class="next">次に${td ?? '—'}mなら <b class="num">${row && row.limit ? row.limit + '分まで' : '潜れません'}</b></div>
         <div class="small">${g} → 今は${al.first ? '1本目扱い' : `グループ ${al.incoming}`}${inc.strict ? '・1段階厳しく' : ''}</div>`;
     } else info = `<div class="small">${g}・${esc(al.note || '')}</div>`;
-    btn = `<button class="btn btn-primary" data-act="sheet" data-sheet="down" data-i="${i}">${ic('arrow-down-to-line')}潜降</button>`;
+    btn = `<button class="btn btn-primary" data-act="sheet" data-sheet="down" data-i="${esc(i)}">${ic('arrow-down-to-line')}潜降</button>`;
   } else {
     stateLabel = `<span class="state">待機</span>`;
     info = '<div class="small">まだ潜っていません</div>';
-    btn = `<button class="btn btn-primary" data-act="sheet" data-sheet="down" data-i="${i}">${ic('arrow-down-to-line')}潜降</button>`;
+    btn = `<button class="btn btn-primary" data-act="sheet" data-sheet="down" data-i="${esc(i)}">${ic('arrow-down-to-line')}潜降</button>`;
   }
   const recentDel = dv.dives.some(d => d.deleted && Date.now() - new Date(d.endAt) < 86400000);
   if (recentDel) info += '<div class="small"><b>削除した潜水は計算に入っていません。</b>本当に潜った記録なら、削除を取り消すか指揮者が判断してください。</div>';
   const warn = last && (last.status === 'deco' || last.status === 'out' || last.omitted)
     ? `<div class="alert" style="grid-column:1/-1">${ic('triangle-alert')}<span>${esc(last.warnings.filter(w => w.level === 'stop').map(w => w.text).join(' ') || '判定を確認してください')}</span></div>` : '';
   return `<div class="diver">
-    <button class="diver-head" data-act="sheet" data-sheet="diver" data-i="${i}"><span class="diver-name">${esc(m.name)}</span>${stateLabel}<span class="small">${st === 'down' ? `${n + 1}本目` : `${n}本`}${ic('chevron-right')}</span></button>
+    <button class="diver-head" data-act="sheet" data-sheet="diver" data-i="${esc(i)}"><span class="diver-name">${esc(m.name)}</span>${stateLabel}<span class="small">${st === 'down' ? `${n + 1}本目` : `${n}本`}${ic('chevron-right')}</span></button>
     <div class="diver-act">${btn}</div>
     ${clock}
     <div class="diver-info">${info}</div>
@@ -470,7 +488,7 @@ function diverRow(inc, dv, i) {
 
 /* ----- 潜降 ----- */
 function sheetDown() {
-  const inc = curInc(), dv = inc.divers[sheet.i], m = member(dv.memberId);
+  const inc = curInc(), dv = DVof(inc, sheet.i), m = member(dv.memberId);
   const t = incidentTable(inc).data;
   sheet.depth ??= liveDives(dv).length ? (liveDives(dv).slice(-1)[0].plannedDepth ?? null) : null;
   sheet.startP ??= S.settings.startP;
@@ -478,7 +496,7 @@ function sheetDown() {
   const L = sheet.depth != null ? limitFor(inc, dv, sheet.depth, sheet.startP, nowISO()) : null;
   const al = allowanceFor(inc, dv);
   return `${sheetHead(`${esc(m.name)}　${liveDives(dv).length + 1}本目の潜降`)}
-  ${!al.ok ? `<div class="alert">${ic('triangle-alert')}<span>${esc(al.note)}${al.over ? '' : ''}</span></div>${al.over ? `<button class="btn" data-act="next-first" data-i="${sheet.i}">${ic('rotate-ccw')}1本目として扱う（指揮者判断）</button>` : ''}` : ''}
+  ${!al.ok ? `<div class="alert">${ic('triangle-alert')}<span>${esc(al.note)}${al.over ? '' : ''}</span></div>${al.over ? `<button class="btn" data-act="next-first" data-i="${esc(sheet.i)}">${ic('rotate-ccw')}1本目として扱う（指揮者判断）</button>` : ''}` : ''}
   <section class="stack"><h2>予定の最大水深</h2>
     <div class="chips chips-grid">${t.depths.map(d => `<button class="chip num" data-act="down-depth" data-v="${d}" aria-pressed="${sheet.depth === d}">${ic('check')}${d}m</button>`).join('')}</div>
   </section>
@@ -516,7 +534,7 @@ function upDive(inc, dv) {
 }
 function upResult(inc, dv) { return Engine.computeDive(incidentTable(inc).data, lastResult(diverResults(inc, dv)), upDive(inc, dv), { strict: inc.strict }); }
 function sheetUp() {
-  const inc = curInc(), dv = inc.divers[sheet.i], m = member(dv.memberId), c = dv.current;
+  const inc = curInc(), dv = DVof(inc, sheet.i), m = member(dv.memberId), c = dv.current;
   if (!sheet.init) {
     sheet.init = true; sheet.safety = null; sheet.endTouched = false; sheet.ascentTouched = false;
     sheet.maxDepth = ''; sheet.endP = ''; sheet.cond = null; sheet.note = ''; sheet.decoStop = ''; sheet.adtTouched = false;
@@ -576,13 +594,13 @@ function diveLine(d, r, k, act) {
     </div>${act ? ic('pencil') : ''}</button>`;
 }
 function sheetDiver() {
-  const inc = curInc(), dv = inc.divers[sheet.i], m = member(dv.memberId);
+  const inc = curInc(), dv = DVof(inc, sheet.i), m = member(dv.memberId);
   const res = diverResults(inc, dv);
   const al = dv.current ? null : allowanceFor(inc, dv);
   const lastD = liveDives(dv).slice(-1)[0];
   return `${sheetHead(esc(m.name))}
   <section class="stack"><h2>潜水の記録</h2>
-  ${dv.dives.length ? `<div class="list">${dv.dives.map((d, k) => diveLine(d, res[k], k, `data-act="sheet" data-sheet="edit" data-i="${sheet.i}" data-k="${k}" aria-label="${k + 1}本目を修正"`)).join('')}</div>` : '<p class="small">まだ潜っていません。</p>'}
+  ${dv.dives.length ? `<div class="list">${dv.dives.map((d, k) => diveLine(d, res[k], k, `data-act="sheet" data-sheet="edit" data-i="${esc(sheet.i)}" data-k="${esc(d.id)}" aria-label="${k + 1}本目を修正"`)).join('')}</div>` : '<p class="small">まだ潜っていません。</p>'}
   ${lastD ? `<p class="small">浮上から14時間（${after14h(lastD.endAt)} まで）は、重激な業務を避けてください（高圧則 第18条）。</p>` : ''}
   </section>
   ${al ? `<section class="stack"><h2>今から潜る場合の上限</h2>
@@ -590,17 +608,17 @@ function sheetDiver() {
     <div class="tablebox"><table class="t"><thead><tr><th>表の水深</th><th>残留窒素（分）</th><th>潜れる時間（分）</th></tr></thead><tbody>
     ${al.rows.map(r => `<tr><td>${r.depth}m</td><td>${r.rnt ?? '—'}</td><td>${r.limit ? r.limit : (r.noData ? '記載なし（0）' : '0')}${r.avoid ? '・避ける' : ''}</td></tr>`).join('')}</tbody></table></div>
     <p class="small">「記載なし」は表に数値がない水深で、潜らない扱いです。「避ける」は表に「30mより深い反復潜水は避ける」とある水深です。</p>`
-    : `<div class="alert">${ic('triangle-alert')}<span>${esc(al.note)}</span></div>${al.over ? `<button class="btn" data-act="next-first" data-i="${sheet.i}">${ic('rotate-ccw')}1本目として扱う（指揮者判断）</button>` : ''}`}
+    : `<div class="alert">${ic('triangle-alert')}<span>${esc(al.note)}</span></div>${al.over ? `<button class="btn" data-act="next-first" data-i="${esc(sheet.i)}">${ic('rotate-ccw')}1本目として扱う（指揮者判断）</button>` : ''}`}
   </section>` : ''}
-  ${dv.nextFirst ? `<p class="small">次の潜水は1本目として扱います（指揮者判断）。<button class="link" data-act="next-first-off" data-i="${sheet.i}">取り消す</button></p>` : ''}
-  ${!dv.dives.length && !dv.current ? `<button class="btn" data-act="remove-diver" data-i="${sheet.i}">${ic('trash-2')}この事案から外す</button>` : ''}`;
+  ${dv.nextFirst ? `<p class="small">次の潜水は1本目として扱います（指揮者判断）。<button class="link" data-act="next-first-off" data-i="${esc(sheet.i)}">取り消す</button></p>` : ''}
+  ${!dv.dives.length && !dv.current ? `<button class="btn" data-act="remove-diver" data-i="${esc(sheet.i)}">${ic('trash-2')}この事案から外す</button>` : ''}`;
 }
 function statusText(r) { return r.deleted ? '削除' : (({ ok: '無減圧', deco: `減圧 ${r.stop5}分`, out: '範囲外', na: '—' })[r.status] || '—'); }
 
 /* ----- 記録の修正（前の値と日時を履歴に残す） ----- */
 function sheetEdit() {
-  const inc = curInc(), dv = inc.divers[sheet.i], d = dv.dives[sheet.k];
-  return `${sheetHead(`${esc(member(dv.memberId).name)}　${sheet.k + 1}本目を修正`)}
+  const inc = curInc(), dv = DVof(inc, sheet.i), d = dv.dives.find(x => x.id === sheet.k);
+  return `${sheetHead(`${esc(member(dv.memberId).name)}　${d.importNo ?? dv.dives.indexOf(d) + 1}本目を修正`)}
   <div class="grid2">
     <label class="field"><span>潜降時刻</span><input class="input num" id="e-start" type="time" value="${hm(d.startAt)}"></label>
     <label class="field"><span>水面に着いた時刻</span><input class="input num" id="e-end" type="time" value="${hm(d.endAt)}"></label>
@@ -664,7 +682,7 @@ function sheetMember() {
     <label class="field"><span>備考（任意）</span><input class="input" id="q-note"></label>
     <button class="btn btn-primary btn-block" data-act="add-qual">${ic('plus')}${esc(m.name)}さんに追加</button>
   </section>
-  ${used ? '<p class="small">記録に使われている隊員は削除できません。異動・退職にしてください。</p>' : `<button class="btn btn-quiet" data-act="del-member" data-id="${esc(m.id)}">${ic('trash-2')}この隊員を削除</button>`}`;
+  ${!lead ? '' : used ? '<p class="small">記録に使われている隊員は削除できません。異動・退職にしてください。</p>' : `<button class="btn btn-quiet" data-act="del-member" data-id="${esc(m.id)}">${ic('trash-2')}この隊員を削除</button>`}`;
 }
 
 /* ----- 見本を消す ----- */
@@ -744,7 +762,8 @@ function viewSummary() {
       <button class="btn btn-primary btn-big btn-block" data-act="close-inc" ${downNow.length ? 'disabled' : ''}>${ic('flag')}事案を終了する（${hm(nowISO())}）</button>
     </section>` : ''}
     ${inc.imported ? '' : CLOUD ? `<section class="stack"><h2 id="send-head">${active ? '2. 共有' : '共有'}</h2>
-      <p class="small">記録は自動で隊の全員と共有されます（<span data-sync-badge>${syncBadge()}</span>）。メールで送る必要はありません。台帳へは、署のパソコンで「記録・経歴簿」→「台帳用CSV」を取り込みます。</p>
+      <p class="${incPending(inc) ? 'alert' : 'small'}">${incPending(inc) ? `${ic('cloud-off')}<span><b>この事案に、まだ送れていない記録があります。</b>電波が戻ると自動で送ります。</span>` : `${ic('check')} <b>この事案の記録は共有済みです</b>（署のパソコンからも見られます）。`}</p>
+      <p class="small">メールで送る必要はありません。台帳へは、署のパソコンで「記録・経歴簿」→「台帳用CSV」を取り込みます。</p>
       <details><summary class="small"><b>予備：この事案のCSVを作る</b></summary><div class="grid2" style="margin-top:.5rem">
         <button class="btn" data-act="save-csv" ${rows.length ? '' : 'disabled'}>${ic('download')}保存</button>
         <button class="btn" data-act="copy-csv" ${rows.length ? '' : 'disabled'}>${ic('copy')}コピー</button></div>
@@ -1240,10 +1259,15 @@ function viewSettings() {
       <div class="chips">${[['auto', '端末に合わせる'], ['light', '明るい'], ['dark', '暗い']].map(([v, l]) => `<button class="chip" data-act="theme" data-v="${v}" aria-pressed="${st.theme === v}">${ic('check')}${l}</button>`).join('')}</div>
     </section>
     ${CLOUD ? `<section class="stack"><h2>ログイン</h2>
-      <p class="small">${esc(me()?.name || '')}（職員番号 ${esc(me()?.id || '')}・${{ admin: '管理者', leader: '隊長', member: '隊員' }[me()?.role] || '隊員'}）　${syncBadge()}</p>
-      <div class="grid2"><button class="btn" data-act="sync-now">${ic('refresh-cw')}今すぐ共有</button><button class="btn" data-act="logout">${ic('log-out')}ログアウト</button></div>
-      ${logoutConfirm ? `<div class="alert">${ic('triangle-alert')}<span>まだ送れていない記録が ${pendingCount()}件あります。ログアウトすると消えます。電波のある所で「今すぐ共有」を押してからにしてください。それでもログアウトするなら、もう一度「ログアウト」を押してください。</span></div>` : ''}
-      <p class="small">ログアウトすると、この端末の記録を消します（共有の記録は残ります）。現場用スマホを別の人が使うときに押してください。</p>
+      <p class="small">${esc(me()?.name || '')}（職員番号 ${esc(me()?.id || '')}・${{ admin: '管理者', leader: '隊長', member: '隊員' }[me()?.role] || '隊員'}）</p>
+      <p class="small"><b>${esc(syncDetail())}</b></p>
+      <div class="grid2"><button class="btn" data-act="sync-now">${ic('refresh-cw')}今すぐ共有</button><button class="btn" data-act="logout">${ic('log-out')}使う人を替える</button></div>
+      <p class="small">「使う人を替える」はログイン画面に戻るだけで、記録はこの端末に残ります（まだ送れていない記録は、次の人のログインで送ります）。</p>
+      <details><summary class="small"><b>私物のスマホで使い終わったとき</b></summary>
+        <p class="small">この端末から記録を消します（共有の記録は残ります）。まだ送れていない記録や進行中の事案があるときは消せません。</p>
+        ${logoutConfirm ? `<div class="alert">${ic('triangle-alert')}<span>この端末から記録を消します。もう一度押すと消します。</span></div>` : ''}
+        <button class="btn" data-act="forget">${ic('trash-2')}この端末から記録を消してログアウト</button>
+      </details>
     </section>` : ''}
     <section class="stack" ${isLeader() ? '' : 'hidden'}><h2>過去の記録を取り込む</h2>
       <p class="small">アプリを使う前の潜水記録を、経歴簿に入れます。台帳の「CSV抽出」シートで［CSVで保存］したファイル、またはアプリのCSVを選んでください。同じ記録は二重に入りません。</p>
@@ -1339,12 +1363,15 @@ document.addEventListener('click', async e => {
   if (!el) return;
   const act = el.dataset.act;
   const inc = curInc();
-  const I = el.dataset.i != null ? Number(el.dataset.i) : null;
+  const I = el.dataset.i ?? null; // 潜水員は職員番号で指す（並び順はほかの端末の変更で変わるため）
 
   switch (act) {
     case 'reload': location.reload(); break;
     case 'login': await doLogin(); break;
     case 'logout': doLogout(); break;
+    case 'forget': doForget(); break;
+    case 'relogin': view = { name: 'login' }; render(); break;
+    case 'login-back': go('home'); break;
     case 'sync-now': syncNote = ''; await syncNow(); break;
     case 'p-role': { const m = S.members.find(x => x.id === sheet.id); if (!m || !isAdmin()) break; snapshot(); m.role = m.role === 'leader' ? 'member' : 'leader'; saved(); renderSheet(); render(); toast(m.role === 'leader' ? `${m.name}を隊長にしました` : `${m.name}を隊長から外しました`, true); break; }
     case 'home-all': homeAll = !homeAll; render(); break;
@@ -1359,10 +1386,10 @@ document.addEventListener('click', async e => {
     case 'go': if (view.name === 'new') readDraft(); if (el.dataset.to === 'new') draft = null; if (el.dataset.to === 'records') { rec.ids = null; rec.q = ''; } go(el.dataset.to); break;
     case 'open-inc': { const x = S.incidents.find(i => i.id === el.dataset.id); go(x.status === 'active' && !x.imported ? 'board' : 'summary', { incidentId: x.id }); break; }
     case 'go-summary': go('summary', { incidentId: inc.id }); break;
-    case 'undo': if (undoSnap) { S = JSON.parse(undoSnap); undoSnap = null; saved(); $('#toast').hidden = true; sheet = null; render(); toast('元に戻しました'); } break;
+    case 'undo': if (undoSnap) { const keepSync = S.sync; S = JSON.parse(undoSnap); if (keepSync) S.sync = keepSync; undoSnap = null; saved(); $('#toast').hidden = true; sheet = null; render(); toast('元に戻しました'); } break;
     case 'sheet-close': closeSheet(); break;
     case 'sheet-close-back': if (e.target === el) closeSheet(); break;
-    case 'sheet': openSheet(el.dataset.sheet, { i: I, k: el.dataset.k != null ? Number(el.dataset.k) : null, id: el.dataset.id ?? null }); break;
+    case 'sheet': openSheet(el.dataset.sheet, { i: I, k: el.dataset.k ?? null, id: el.dataset.id ?? null }); if (['down', 'up'].includes(el.dataset.sheet)) syncNow(); break;
     case 'clear-sample': {
       snapshot();
       const ids = S.members.filter(m => m.sample).map(m => m.id);
@@ -1391,22 +1418,23 @@ document.addEventListener('click', async e => {
     case 'down-depth': readDownInputs(); sheet.depth = Number(el.dataset.v); renderSheet(); break;
     case 'do-down': {
       readDownInputs();
-      const dv = inc.divers[sheet.i];
+      const dv = DVof(inc, sheet.i);
       snapshot();
       const sp = numOrBlank(sheet.startP), tk = numOrBlank(sheet.tank);
       if (Number.isNaN(sp) || Number.isNaN(tk)) { toast('開始圧とタンク容量は数字で入れてください'); break; }
       dv.tank = tk || dv.tank;
-      dv.current = { startAt: nowISO(), plannedDepth: sheet.depth, startP: sp === '' ? null : sp, tank: dv.tank };
+      if (dv.current) { sheet = null; render(); toast('この潜水員の潜降は、ほかの端末で記録されています'); break; }
+      dv.current = { id: uid(), startAt: nowISO(), plannedDepth: sheet.depth, startP: sp === '' ? null : sp, tank: dv.tank };
       touch(inc); saved(); sheet = null; render(); toast(`${member(dv.memberId).name}　潜降 ${hm(dv.current.startAt)}`, true); break;
     }
-    case 'ascent-undo': { const dv = inc.divers[I]; snapshot(); dv.current.ascentAt = null; touch(inc); saved(); render(); toast('浮上開始を取り消しました'); break; }
+    case 'ascent-undo': { const dv = DVof(inc, I); snapshot(); dv.current.ascentAt = null; touch(inc); saved(); render(); toast('浮上開始を取り消しました'); break; }
     case 'ascent': {
-      const dv = inc.divers[I]; snapshot();
+      const dv = DVof(inc, I); snapshot();
       dv.current.ascentAt = nowISO();
       touch(inc); saved(); render(); toast(`${member(dv.memberId).name}　浮上開始 ${hm(dv.current.ascentAt)}`, true); break;
     }
-    case 'next-first': { const dv = inc.divers[I]; snapshot(); dv.nextFirst = true; touch(inc); saved(); if (sheet) renderSheet(); render(); toast('次の潜水を1本目として扱います', true); break; }
-    case 'next-first-off': { const dv = inc.divers[I]; dv.nextFirst = false; touch(inc); saved(); renderSheet(); render(); break; }
+    case 'next-first': { const dv = DVof(inc, I); snapshot(); dv.nextFirst = true; touch(inc); saved(); if (sheet) renderSheet(); render(); toast('次の潜水を1本目として扱います', true); break; }
+    case 'next-first-off': { const dv = DVof(inc, I); dv.nextFirst = false; touch(inc); saved(); renderSheet(); render(); break; }
 
     /* 浮上 */
     case 'up-cond': readUpInputs(); sheet.cond = el.dataset.v; renderSheet(); break;
@@ -1414,7 +1442,7 @@ document.addEventListener('click', async e => {
     case 'up-safety': readUpInputs(); sheet.safety = el.dataset.v; renderSheet(); break;
     case 'do-up': {
       readUpInputs();
-      const dv = inc.divers[sheet.i], c = dv.current;
+      const dv = DVof(inc, sheet.i), c = dv.current;
       const u = upDefaults(inc, dv);
       if (!sheet.adtTouched) sheet.adt = String(u.adt);
       const depth = numOrBlank(sheet.maxDepth), adt = numOrBlank(sheet.adt), endP = numOrBlank(sheet.endP), deco = numOrBlank(sheet.decoStop);
@@ -1433,7 +1461,7 @@ document.addEventListener('click', async e => {
       if (msg) { toast(msg); break; }
       const stopMin = r.status === 'deco' ? deco : (sheet.safety === '有' ? u.stopMin : 0);
       snapshot();
-      dv.dives.push({ id: uid(), startAt: c.startAt, ascentAt: u.ascentAt, endAt: u.endAt, plannedDepth: c.plannedDepth, tank: c.tank ?? dv.tank, startP: c.startP, endP: endP === '' ? null : endP,
+      dv.dives.push({ id: c.id || uid(), startAt: c.startAt, ascentAt: u.ascentAt, endAt: u.endAt, plannedDepth: c.plannedDepth, tank: c.tank ?? dv.tank, startP: c.startP, endP: endP === '' ? null : endP,
         updatedAt: nowISO(), maxDepth: depth, adt, safetyStop: sheet.safety === '有', stopMin: stopMin || 0, decoStopDone: r.status === 'deco' ? deco : null, condition: sheet.cond, note: sheet.note, treatAsFirst: !!dv.nextFirst });
       dv.nextFirst = false; dv.current = null;
       touch(inc); saved(); sheet = null; render(); toast(`${member(dv.memberId).name}　浮上 ${hm(u.endAt)}`, true); break;
@@ -1443,7 +1471,8 @@ document.addEventListener('click', async e => {
     case 'edit-cond': sheet.cond = el.dataset.v; readEditInputsToSheet(); renderSheet(); restoreEditInputs(); break;
     case 'edit-safety': sheet.safety = el.dataset.v; readEditInputsToSheet(); renderSheet(); restoreEditInputs(); break;
     case 'save-edit': {
-      const dv = inc.divers[sheet.i], d = dv.dives[sheet.k];
+      const dv = DVof(inc, sheet.i), d = dv && dv.dives.find(x => x.id === sheet.k);
+      if (!d) { sheet = null; render(); toast('この記録は、ほかの端末で変わりました。開き直してください'); break; }
       const st = isoFromHM(d.startAt, $('#e-start').value), en = isoFromHM(d.startAt, $('#e-end').value);
       if (!st || !en) { toast('時刻を「時:分」で入れてください'); break; }
       const vals = ['#e-depth', '#e-adt', '#e-startp', '#e-endp', '#e-stop'].map(id => numOrBlank($(id).value));
@@ -1475,12 +1504,12 @@ document.addEventListener('click', async e => {
       const why = $('#e-why')?.value.trim();
       if (!why) { toast('削除する理由を入れてください'); $('#e-why')?.focus(); break; }
       const i = sheet.i; snapshot();
-      const d = inc.divers[i].dives[sheet.k];
+      const d = DVof(inc, i).dives.find(x => x.id === sheet.k);
       d.deleted = true; d.updatedAt = nowISO(); (d.edits ||= []).push({ at: nowISO(), why: `削除：${why}`, before: diveSummary(d) });
       touch(inc); saved(); sheet = { name: 'diver', i }; render(); toast('記録を削除しました', true); break;
     }
     case 'add-diver': snapshot(); inc.divers.push({ memberId: el.dataset.v, tank: S.settings.tank, sac: S.settings.sac, current: null, nextFirst: false, dives: [] }); touch(inc); saved(); sheet = null; render(); toast(`${member(el.dataset.v).name}を追加しました`, true); break;
-    case 'remove-diver': snapshot(); inc.divers.splice(I, 1); touch(inc); saved(); sheet = null; render(); toast('潜水員を外しました', true); break;
+    case 'remove-diver': snapshot(); inc.divers = inc.divers.filter(d => d.memberId !== I); touch(inc); saved(); sheet = null; render(); toast('潜水員を外しました', true); break;
 
     /* 事案 */
     case 'inc-type': readIncInputsToSheet(); sheet.type = el.dataset.v; renderSheet(); restoreIncInputs(); break;
@@ -1569,6 +1598,7 @@ document.addEventListener('click', async e => {
     }
     case 'del-qual': { const m = S.members.find(x => x.id === sheet.id); snapshot(); m.quals = (m.quals || []).filter(q => q.id !== el.dataset.id); saved(); renderSheet(); render(); toast('削除しました', true); break; }
     case 'del-member': {
+      if (!isLeader()) break;
       const id = el.dataset.id;
       if (S.incidents.some(i => i.commanderId === id || i.watchId === id || i.divers.some(d => d.memberId === id))) { toast('記録に使われているため削除できません。異動・退職にしてください'); break; }
       snapshot(); S.members = S.members.filter(m => m.id !== id); saved(); sheet = null; render(); toast('隊員を削除しました', true); break;
@@ -1618,7 +1648,7 @@ document.addEventListener('input', e => {
   if (t.dataset.set) { const v = numOrBlank(t.value); if (v !== '' && isFinite(v) && v > 0) { S.settings[t.dataset.set] = v; saved(); } return; }
   if (sheet?.name === 'down' && (t.id === 'd-startp' || t.id === 'd-tank')) {
     readDownInputs();
-    const inc = curInc(), dv = inc.divers[sheet.i];
+    const inc = curInc(), dv = DVof(inc, sheet.i);
     const keepTank = dv.tank; dv.tank = Number(sheet.tank) || dv.tank;
     const pos = t.selectionStart, id = t.id; renderSheet(); dv.tank = keepTank;
     const n = $('#' + id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (er) {} }
@@ -1626,7 +1656,7 @@ document.addEventListener('input', e => {
   }
   if (sheet?.name === 'up' && t.hasAttribute('data-live')) {
     readUpInputs();
-    const inc = curInc(), dv = inc.divers[sheet.i], c = dv.current;
+    const inc = curInc(), dv = DVof(inc, sheet.i), c = dv.current;
     if (t.id === 'u-adt') sheet.adtTouched = true;
     const later = v => (new Date(v) < new Date(c.startAt) ? new Date(new Date(v).getTime() + 86400000).toISOString() : v);
     if (t.id === 'u-end') { const v = isoFromHM(c.startAt, t.value); if (v) { sheet.endTouched = true; sheet.endAt = later(v); } }
@@ -1688,6 +1718,8 @@ const KIND_ORDER = { member: 0, qual: 1, incident: 2, diver: 3, dive: 4 };
 const keyOf = (kind, id) => `${kind}:${id}`;
 const sy = () => (S.sync ||= { token: null, me: null, since: 0, known: {}, outbox: {}, lastAt: null, needFull: false });
 const signedIn = () => CLOUD && !!S.sync?.token;
+// 一度ログインした端末（期限切れでも、記録は続けられる）
+const everIn = () => CLOUD && !!S.sync?.me;
 const me = () => S.sync?.me || null;
 // 隊長・管理者だけができること（共有しない使い方では、誰でもできる）
 const isLeader = () => !CLOUD || ['leader', 'admin'].includes(me()?.role);
@@ -1704,7 +1736,7 @@ function docsOf() {
   });
   S.incidents.forEach(inc => {
     if (inc.sample) return;
-    if (!inc._stub) out.set(keyOf('incident', inc.id), { kind: 'incident', id: inc.id, data: strip(inc, 'id', 'divers', '_stub') });
+    if (!inc._stub) out.set(keyOf('incident', inc.id), { kind: 'incident', id: inc.id, data: strip(inc, 'id', 'divers', '_stub', 'updatedAt', 'sentAt', 'sample') });
     inc.divers.forEach(dv => {
       if (!dv._stub) out.set(keyOf('diver', `${inc.id}~${dv.memberId}`), { kind: 'diver', id: `${inc.id}~${dv.memberId}`, data: { ...strip(dv, 'dives', '_stub'), incidentId: inc.id } });
       dv.dives.forEach(d => out.set(keyOf('dive', d.id), { kind: 'dive', id: d.id, data: { ...strip(d, 'id'), incidentId: inc.id, memberId: dv.memberId } }));
@@ -1713,9 +1745,10 @@ function docsOf() {
   return out;
 }
 // 前回から変わった文書を、送る箱（outbox）に入れる
+const cloudNow = () => new Date(Date.now() + (S.sync?.offset || 0)).toISOString();
 function trackChanges() {
-  if (!signedIn()) return;
-  const s = sy(), now = new Date().toISOString(), cur = docsOf();
+  if (!CLOUD || !S.sync || !S.sync.me || S.sync.fresh) return;
+  const s = sy(), now = cloudNow(), cur = docsOf();
   for (const [k, d] of cur) {
     const h = JSON.stringify(d.data);
     if (s.known[k] !== h) { s.outbox[k] = { ...d, deleted: false, updatedAt: now }; s.known[k] = h; }
@@ -1752,8 +1785,13 @@ function removeFromAll(kind, id) {
   if (kind === 'dive') S.incidents.forEach(i => i.divers.forEach(dv => { dv.dives = dv.dives.filter(d => d.id !== id); }));
 }
 function applyDoc(doc) {
-  const { kind, id, data } = doc;
-  if (doc.deleted) { removeFromAll(kind, id); return; }
+  const { kind, id } = doc;
+  if (!DocSchema.kinds.includes(kind) || typeof id !== 'string' || !id || id.length > 120 || /[\u0000-\u001f<>"'`&]/.test(id)) return false;
+  if (doc.deleted) { removeFromAll(kind, id); return true; }
+  // 届いた中身は、決めた形だけを残してから使う（細工した文字列や、数字に見せかけた文字を画面に出さない）
+  const data = DocSchema.clean(kind, doc.data);
+  if (!data) return false;
+  if (kind === 'incident' && data.tableSnap && Engine.validate(data.tableSnap).errors.length) delete data.tableSnap;
   if (kind === 'member') { const m = memberStub(id); const quals = m.quals || []; Object.keys(m).forEach(k => { if (!['id', 'quals'].includes(k)) delete m[k]; }); Object.assign(m, data, { id, quals }); }
   if (kind === 'qual') { removeFromAll('qual', id); const m = memberStub(data.memberId); m.quals.push({ ...strip(data, 'memberId'), id }); }
   if (kind === 'incident') { const inc = incStub(id); const divers = inc.divers; Object.keys(inc).forEach(k => { if (!['id', 'divers'].includes(k)) delete inc[k]; }); Object.assign(inc, data, { id, divers }); }
@@ -1764,6 +1802,7 @@ function applyDoc(doc) {
     dv.dives.push({ ...strip(data, 'incidentId', 'memberId'), id });
     dv.dives.sort((a, b) => String(a.startAt).localeCompare(String(b.startAt)));
   }
+  return true;
 }
 // 送ったり受け取ったりする。電波がない・ログインしていないときは何もしない
 let syncing = null, syncTimer = null, syncNote = '';
@@ -1773,44 +1812,65 @@ async function syncNow() {
   if (navigator.onLine === false) { syncNote = 'offline'; renderSyncBadge(); return; }
   syncing = (async () => {
     const s = sy();
-    trackChanges();
-    let rounds = 0, changedLocal = false, rejectedMsg = '';
-    let since = s.needFull ? 0 : s.since, refetch = false, refetched = s.needFull;
-    const rejectedKeys = new Set(), seen = new Set();
+    s.failed ||= {};
+    let rounds = 0, changedLocal = false, rejectedMsg = '', lostCount = 0;
+    // ログインした直後（fresh）は、先に共有の記録を受け取ってから、この端末にしか無いものを送る
+    let since = s.fresh ? 0 : s.since, refetch = false, refetched = false;
+    const staleKeys = new Set();
     try {
-      while (rounds++ < 30) {
-        const sent = Object.values(s.outbox).slice(0, 400);
+      while (rounds++ < 40) {
+        if (!s.fresh) trackChanges();
+        const sent = s.fresh ? [] : Object.values(s.outbox).slice(0, 400);
+        const t0 = Date.now();
         const res = await fetch(API_BASE + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token }, body: JSON.stringify({ since, changes: sent }) });
-        if (res.status === 401) { s.token = null; syncNote = 'login'; save(); render(); toast('ログインし直してください'); return; }
+        if (res.status === 401) { s.token = null; syncNote = 'login'; save(); if (!sheet) render(); else renderSyncBadge(); toast('共有が止まりました。記録は続けられます。ログインし直すと送ります'); return; }
         if (!res.ok) throw new Error('http ' + res.status);
         const body = await res.json();
+        // 端末の時計とサーバーの時計の差（変更の日時を直すのに使う）
+        if (body.now) { const t1 = Date.now(); s.offset = Date.parse(body.now) - (t0 + t1) / 2; }
         if (body.me) s.me = body.me;
+        if (body.token) s.token = body.token; // 使っている間は、ログインの期限が延びる
+        if (body.reset) { s.known = {}; since = 0; continue; } // サーバーを作り直した：この端末の記録を送り直す
         // 送れた変更を箱から出す（送ったあとに直したものは残す）
         for (const d of sent) { const k = keyOf(d.kind, d.id); if (s.outbox[k] && s.outbox[k].updatedAt === d.updatedAt) delete s.outbox[k]; }
-        // 受け付けられなかった変更（サーバーの方が新しい・権限がない）は、サーバーの内容に合わせ直す
-        for (const r of body.rejected || []) { rejectedKeys.add(keyOf(r.kind, r.id)); refetch = true; if (r.reason !== 'stale' && !rejectedMsg) rejectedMsg = r.reason; }
+        for (const r of body.rejected || []) {
+          const k = keyOf(r.kind, r.id);
+          if (r.reason === 'stale') { staleKeys.add(k); refetch = true; continue; }
+          // 権限がない・形が違う：端末の記録は消さずに残し、「送れなかった記録」として知らせ続ける
+          s.failed[k] = { reason: r.reason, at: new Date().toISOString() }; delete s.outbox[k];
+          if (!rejectedMsg) rejectedMsg = r.reason;
+        }
         const incoming = (body.changes || []).slice().sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || (a.seq - b.seq));
         for (const d of incoming) {
           const k = keyOf(d.kind, d.id), mine = s.outbox[k];
-          seen.add(k);
           if (mine && mine.updatedAt > d.updatedAt) continue; // 端末の方が新しい（次に送る）
-          applyDoc(d); delete s.outbox[k]; changedLocal = true;
+          if (applyDoc(d) === false) continue;
+          if (staleKeys.has(k)) { lostCount++; staleKeys.delete(k); }
+          delete s.outbox[k]; delete s.failed[k];
+          s.known[k] = d.deleted ? undefined : JSON.stringify(docsOf().get(k)?.data ?? null);
+          if (d.deleted) delete s.known[k];
+          changedLocal = true;
         }
         since = body.seq;
-        if (body.more || Object.keys(s.outbox).length) continue;
-        if (refetch && !refetched) { refetched = true; refetch = false; since = 0; seen.clear(); continue; }
+        if (body.more) continue;
+        if (s.fresh) {
+          // 受け取り終えた：ここからこの端末の変更を記録して送る（サーバーに無いものだけが送られる）
+          s.fresh = false; s.since = since; trackChanges();
+          if (Object.keys(s.outbox).length) continue;
+          break;
+        }
+        if (Object.keys(s.outbox).length) continue;
+        if (refetch && !refetched) { refetched = true; refetch = false; since = 0; continue; } // サーバーの新しい方を取り直す
         break;
       }
-      // サーバーに無いのに受け付けられなかったもの（権限のない追加など）は、端末からも消す
-      if (refetched) for (const k of rejectedKeys) if (!seen.has(k)) { const [kind, ...rest] = k.split(':'); removeFromAll(kind, rest.join(':')); changedLocal = true; }
-      s.since = since; s.needFull = false;
-      // 受け取った内容を「知っている状態」にする（受け取ったものを送り返さない）
-      const cur = docsOf(); s.known = {};
-      for (const [k, d] of cur) if (!s.outbox[k]) s.known[k] = JSON.stringify(d.data); else s.known[k] = JSON.stringify(s.outbox[k].data);
-      s.lastAt = new Date().toISOString(); syncNote = '';
+      // 送れなかった記録は、箱からは出す（送り続けない）が、端末には残す
+      for (const k of Object.keys(s.failed)) delete s.outbox[k];
+      s.since = since;
+      s.lastAt = s.lastPullAt = new Date().toISOString(); syncNote = '';
       save();
-      if (changedLocal && !sheet) render(); else renderSyncBadge();
+      if (changedLocal && (!sheet || sheetGone())) render(); else renderSyncBadge();
       if (rejectedMsg) toast(`受け付けられなかった変更があります：${rejectedMsg}`);
+      else if (lostCount) toast(`ほかの端末の、より新しい変更を優先しました（${lostCount}件）`);
     } catch (e) {
       syncNote = 'error'; renderSyncBadge();
     } finally { syncing = null; }
@@ -1819,13 +1879,24 @@ async function syncNow() {
 }
 function syncBadge() {
   if (!CLOUD) return '';
-  if (!signedIn()) return `<span class="sync-badge">${ic('circle-alert')}未ログイン</span>`;
+  if (!signedIn()) return `<span class="sync-badge">${ic('circle-alert')}共有停止</span>`;
   const n = pendingCount();
-  if (syncNote === 'offline' || navigator.onLine === false) return `<span class="sync-badge">${ic('cloud-off')}電波なし${n ? `・未送信 ${n}件` : ''}</span>`;
-  if (syncNote === 'error') return `<span class="sync-badge">${ic('circle-alert')}未送信 ${n}件・あとで送ります</span>`;
-  if (n) return `<span class="sync-badge">${ic('cloud')}送信中 ${n}件</span>`;
-  return `<span class="sync-badge">${ic('check')}共有済み${S.sync.lastAt ? ` ${hm(S.sync.lastAt)}` : ''}</span>`;
+  if (syncNote === 'offline' || navigator.onLine === false) return `<span class="sync-badge">${ic('cloud-off')}${n ? '未送信' : '電波なし'}</span>`;
+  if (syncNote === 'error' && n) return `<span class="sync-badge">${ic('circle-alert')}未送信</span>`;
+  if (n) return `<span class="sync-badge">${ic('cloud')}送信中</span>`;
+  return `<span class="sync-badge">${ic('check')}共有済</span>`;
 }
+// 詳しい状態（設定・終了の手続きで出す）
+function syncDetail() {
+  if (!CLOUD) return '';
+  const n = pendingCount(), s = S.sync || {};
+  if (!signedIn()) return '共有が止まっています。ログインし直すと、未送信の記録を送ります。';
+  if (navigator.onLine === false || syncNote === 'offline') return n ? '電波がないため、まだ送れていない記録があります。電波が戻ると自動で送ります。' : '電波がありません。';
+  if (n) return 'まだ送れていない記録があります。自動で送ります。';
+  return `すべて共有しました（最終 ${s.lastPullAt ? hm(s.lastPullAt) : '—'}）。`;
+}
+// この事案に、まだ送れていない記録があるか
+function incPending(inc) { return Object.values(S.sync?.outbox || {}).some(d => (d.kind === 'incident' && d.id === inc.id) || d.data?.incidentId === inc.id || (d.deleted && d.id.startsWith(inc.id + '~'))); }
 function renderSyncBadge() { document.querySelectorAll('[data-sync-badge]').forEach(el => { el.innerHTML = syncBadge(); }); }
 window.addEventListener('online', () => { syncNote = ''; syncNow(); });
 window.addEventListener('offline', () => { syncNote = 'offline'; renderSyncBadge(); });
@@ -1833,23 +1904,25 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 30000);
 
 /* ----- ログイン ----- */
-let loginMsg = '';
+let loginMsg = '', loginId = '';
 function viewLogin() {
   return `${bar('潜水現場記録', '宮古島市消防本部 潜水隊', false)}
   <main class="wrap">
     <section class="stack">
       <h1><span class="u">ログイン</span></h1>
       <p class="small">記録は隊の全員で共有します。自分の職員番号と、隊のパスコードを入れてください。</p>
-      <label class="field"><span>職員番号</span><input class="input num" id="li-id" inputmode="numeric" autocomplete="username"></label>
+      <label class="field"><span>職員番号</span><input class="input num" id="li-id" inputmode="numeric" autocomplete="username" value="${esc(loginId)}"></label>
       <label class="field"><span>隊のパスコード</span><input class="input" id="li-pass" type="password" autocomplete="current-password"></label>
       ${loginMsg ? `<div class="alert" role="alert">${ic('triangle-alert')}<span>${esc(loginMsg)}</span></div>` : ''}
       <button class="btn btn-primary btn-big btn-block" data-act="login">${ic('key-round')}ログイン</button>
-      <p class="small">パスコードは隊長に聞いてください。ほかの人に教えないでください。</p>
+      <p class="small">パスコードは隊長に聞いてください。ほかの人に教えないでください。名簿に無い人は、隊長に登録を頼んでください。</p>
+      ${everIn() ? `<button class="btn btn-block" data-act="login-back">${ic('chevron-left')}ログインせずに記録を続ける</button>` : ''}
     </section>
   </main>`;
 }
 async function doLogin() {
   const id = toHalf($('#li-id')?.value || ''), pass = $('#li-pass')?.value || '';
+  loginId = id;
   if (!id || !pass) { loginMsg = '職員番号とパスコードを入れてください。'; render(); return; }
   if (navigator.onLine === false) { loginMsg = '電波のある所でログインしてください。'; render(); return; }
   let res, body;
@@ -1859,20 +1932,29 @@ async function doLogin() {
   // 見本は送らずに消す。この端末にあった記録（v0.4 までの記録）は、ログインした人の変更として送る
   S.members = S.members.filter(m => !m.sample);
   S.incidents = S.incidents.filter(i => !i.sample);
-  S.sync = { token: body.token, me: body.member, since: 0, known: {}, outbox: {}, lastAt: null, needFull: false };
+  // 前にこの端末でログインしていたなら、まだ送れていない記録と受け取り済みの位置をそのまま使う
+  const prev = S.sync && S.sync.known ? S.sync : null;
+  S.sync = { since: 0, known: {}, outbox: {}, failed: {}, lastAt: null, fresh: !prev, ...(prev ? { since: prev.since, known: prev.known, outbox: prev.outbox, failed: prev.failed || {}, lastAt: prev.lastAt, offset: prev.offset } : {}), token: body.token, me: body.member };
   loginMsg = '';
   saved(); go('home'); toast(`${body.member.name}でログインしました`);
   syncNow();
 }
+// 使う人を替える：記録とまだ送れていない記録は残し、ログイン画面に戻る（次の人のログインで送る）
 function doLogout() {
-  const n = pendingCount();
-  if (n && !logoutConfirm) { logoutConfirm = true; render(); return; }
+  if (navigator.onLine === false) { toast('電波がないときは、使う人を替えられません（ログインに電波が要るため）'); return; }
+  S.sync.token = null; S.sync.me = null;
+  saved(); view = { name: 'login' }; render(); toast('ログアウトしました。記録はこの端末に残っています');
+}
+// 私物スマホなどで、この端末から記録を消す（共有の記録はサーバーに残る）。送れていない記録・進行中の事案があれば消さない
+function doForget() {
+  if (pendingCount()) { toast('まだ送れていない記録があります。電波のある所で「今すぐ共有」を押してからにしてください'); return; }
+  if (S.incidents.some(i => i.status === 'active')) { toast('進行中の事案があります。終了してからにしてください'); return; }
+  if (!logoutConfirm) { logoutConfirm = true; render(); return; }
   logoutConfirm = false;
-  // この端末の記録を消して、ログイン画面に戻る（共有の記録はサーバーに残る）
   const keep = { theme: S.settings.theme };
   S = { ...sampleState(), members: [], incidents: [], settings: { ...sampleState().settings, ...keep, lastBackup: null } };
   S.sync = { token: null, me: null, since: 0, known: {}, outbox: {}, lastAt: null, needFull: false };
-  saved(); go('login'); toast('ログアウトしました');
+  saved(); view = { name: 'login' }; render(); toast('この端末の記録を消しました');
 }
 let logoutConfirm = false;
 

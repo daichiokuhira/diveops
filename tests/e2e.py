@@ -61,7 +61,7 @@ async def main():
         await pg.click('text=記録を始める')
 
         # 潜降：水深を選ぶまで記録できない
-        await pg.click('[data-act="sheet"][data-sheet="down"][data-i="0"]')
+        await pg.click('[data-act="sheet"][data-sheet="down"][data-i="S02"]')
         ex('水深未選択では潜降を記録できない', await pg.locator('[data-act="do-down"]').count(), 0)
         await pg.click('[data-act="down-depth"][data-v="18"]')
         await pg.screenshot(path=SH + '03_down_sheet.png')
@@ -76,13 +76,13 @@ async def main():
         ex('上限超過を反転表示', await pg.locator('.remain.over').count(), 1)
 
         # 浮上開始の押し間違いは取り消せる
-        await pg.click('[data-act="ascent"][data-i="0"]')
-        await pg.click('[data-act="ascent-undo"][data-i="0"]')
+        await pg.click('[data-act="ascent"][data-i="S02"]')
+        await pg.click('[data-act="ascent-undo"][data-i="S02"]')
         ex('浮上開始を取り消すと潜水中に戻る', await pg.locator('.remain.over').count(), 1)
         # 浮上開始 → 水面に着いた
-        await pg.click('[data-act="ascent"][data-i="0"]')
+        await pg.click('[data-act="ascent"][data-i="S02"]')
         ex('浮上中の表示', await pg.locator('text=浮上中').count() >= 1, True)
-        await pg.click('[data-act="sheet"][data-sheet="up"][data-i="0"]')
+        await pg.click('[data-act="sheet"][data-sheet="up"][data-i="S02"]')
         ex('最大水深は空欄で始まる', await pg.input_value('#u-depth'), '')
         ex('潜水時間は浮上開始まで（55分、切り上げ）', await pg.input_value('#u-adt') in ('55', '56'), True)
         await pg.click('[data-act="do-up"]')
@@ -111,9 +111,9 @@ async def main():
         ex('ボード はみ出しなし', await overflow(pg), False)
 
         # 修正（理由が必須）→ 2本目を記録 → 1本目を削除
-        await pg.click('[data-act="sheet"][data-sheet="diver"][data-i="0"]')
+        await pg.click('[data-act="sheet"][data-sheet="diver"][data-i="S02"]')
         await pg.screenshot(path=SH + '07_diver_detail.png')
-        await pg.click('[data-sheet="edit"][data-k="0"]')
+        await pg.click('[data-sheet="edit"] >> nth=0')
         await pg.fill('#e-depth', '18')
         await pg.click('[data-act="save-edit"]')
         ex('理由なしでは直せない', await pg.locator('#e-why').count(), 1)
@@ -121,7 +121,7 @@ async def main():
         await pg.click('[data-act="save-edit"]')
         ex('修正1回が残る', await pg.locator('text=修正1回').count(), 1)
         # 潜降を浮上より後にする修正は通さない
-        await pg.click('[data-sheet="edit"][data-k="0"]')
+        await pg.click('[data-sheet="edit"] >> nth=0')
         await pg.wait_for_timeout(200)
         before = await pg.evaluate(js("return (await getS()).incidents.find(i=>i.status==='active').divers[0].dives[0].startAt;"), None)
         end_hm = await pg.input_value('#e-end')
@@ -133,8 +133,8 @@ async def main():
         after = await pg.evaluate(js("return (await getS()).incidents.find(i=>i.status==='active').divers[0].dives[0].startAt;"), None)
         ex('潜降を浮上の後にする修正は保存しない', after, before)
         await pg.click('[data-act="sheet-close"]')
-        await pg.click('[data-act="sheet"][data-sheet="diver"][data-i="0"]')
-        await pg.click('[data-sheet="edit"][data-k="0"]')
+        await pg.click('[data-act="sheet"][data-sheet="diver"][data-i="S02"]')
+        await pg.click('[data-sheet="edit"] >> nth=0')
         await pg.click('[data-act="delete-dive"]')
         ex('理由なしでは削除できない', await pg.locator('.dive-line.is-deleted').count(), 0)
         await pg.fill('#e-why', '別の隊員の記録を誤って入力')
@@ -144,10 +144,10 @@ async def main():
         ex('削除した潜水は計算に入っていないと知らせる', await pg.locator('text=削除した潜水は計算に入っていません').count(), 1)
 
         # 2人目（見本 三郎）も1本潜る
-        await pg.click('[data-act="sheet"][data-sheet="down"][data-i="1"]')
+        await pg.click('[data-act="sheet"][data-sheet="down"][data-i="S03"]')
         await pg.click('[data-act="down-depth"][data-v="12"]')
         await pg.click('[data-act="do-down"]')
-        await pg.click('[data-act="sheet"][data-sheet="up"][data-i="1"]')  # 浮上開始を押し忘れて「もう水面にいる」
+        await pg.click('[data-act="sheet"][data-sheet="up"][data-i="S03"]')  # 浮上開始を押し忘れて「もう水面にいる」
         ex('浮上開始なしでも浮上画面を開ける', await pg.locator('#u-asc').input_value(), '')
         await pg.fill('#u-depth', '11.5'); await pg.dispatch_event('#u-depth', 'input')
         await pg.click('[data-act="up-safety"][data-v="無"]')
@@ -155,8 +155,8 @@ async def main():
         await pg.fill('#u-note', '右耳の違和感, 浮上後に回復')
         await pg.click('[data-act="do-up"]')
         # あとで減圧が必要な潜水に直し、5mの停止が足りなければ止める（確かめたら元に戻す）
-        await pg.click('[data-act="sheet"][data-sheet="diver"][data-i="1"]')
-        await pg.click('[data-sheet="edit"][data-k="0"]')
+        await pg.click('[data-act="sheet"][data-sheet="diver"][data-i="S03"]')
+        await pg.click('[data-sheet="edit"] >> nth=0')
         sh, sm = map(int, (await pg.input_value('#e-start')).split(':')); sm += 30; sh = (sh + sm // 60) % 24; sm %= 60
         await pg.fill('#e-end', f'{sh:02d}:{sm:02d}')
         await pg.fill('#e-depth', '30'); await pg.fill('#e-adt', '23'); await pg.fill('#e-stop', '3'); await pg.fill('#e-why', '試験')
