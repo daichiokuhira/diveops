@@ -1,0 +1,11 @@
+# 生成物（作業用）
+ledger/build/
+app/preview/
+tests/shots/
+__pycache__/
+node_modules/
+.DS_Store
+# 実データは絶対に入れない（隊員の氏名・記録を含むため）
+*.csv
+*実データ*
+*控え*.json
