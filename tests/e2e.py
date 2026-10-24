@@ -286,8 +286,7 @@ async def main():
         async with pg.expect_download() as dl3:
             await pg.click('[data-act="rec-csv"]')
         rows3 = list(csv.reader(io.StringIO(open(await (await dl3.value).path(), encoding='utf-8').read().lstrip('\ufeff'))))
-        ex('台帳用CSVは48列・選んだ2人の記録', [len(rows3[0]), sorted({r[1] for r in rows3[1:]})], [48, ['0123', 'S03']])
-        ex('取り込んだ記録の本数はCSVの本数のまま', [r[19] for r in rows3[1:] if r[1] == '0123'], ['1'])
+        ex('台帳用CSVは48列・このスマホで記録した分だけ（取り込んだ過去の記録は含めない）', [len(rows3[0]), sorted({r[1] for r in rows3[1:]}), any(r[35].startswith('imp-') for r in rows3[1:])], [48, ['S03'], False])
         await pg.click('[data-act="back"]')
 
         # 保存先の接続が切れても、次の保存で開き直す（iOS で裏に回ったときなど）
@@ -330,6 +329,15 @@ async def main():
         await pg2.evaluate("localStorage.setItem('diveops.v1', JSON.stringify({ v: 1, savedAt: '2999-01-01T00:00:00Z', members: [{ id: '2002', name: '新しい 次郎' }], settings: { tank: 10, sac: 20, reserve: 50, startP: 200, theme: 'auto' }, tables: { activeId: 'x', list: [] }, incidents: [] }))")
         await pg2.reload(); await pg2.wait_for_timeout(500)
         ex('新しい方の記録を読む', await pg2.evaluate(js("return (await getS()).members.map(m => m.name);"), None), ['新しい 次郎'])
+        before_keys = await pg2.evaluate(js("return (await keys()).map(String).sort();"), None)
+        ex('古い方は消さずに退避', any(k.startswith('state.before-ls.') for k in before_keys), True)
+        # 保存先が応答しない起動：見本で始めず、何も保存しない
+        pg3 = await ctx2.new_page()
+        await pg3.add_init_script("indexedDB.open = () => ({})")
+        await pg3.goto(URL); await pg3.wait_for_timeout(9000)
+        ex('読み込めないときは止めて知らせる', await pg3.locator('text=記録を読み込めませんでした').count(), 1)
+        await pg3.close()
+        ex('そのとき記録は上書きされない', await pg2.evaluate(js("return (await getS()).members.map(m => m.name);"), None), ['新しい 次郎'])
         await pg2.screenshot(path=SH + '12_home_dark.png')
         ex('暗い表示 はみ出しなし', await overflow(pg2), False)
         await b.close()
