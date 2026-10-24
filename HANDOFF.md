@@ -26,10 +26,11 @@ Claude（Cowork のチャット）で作った経緯と、次にやることを�
 
 ## 今の状態（v0.3.0）
 - GitHub：daichiokuhira/diveops（公開）。Pages は main の /docs（https://daichiokuhira.github.io/diveops/）。
-- 5分野の専門家レビュー（潜水表・UI/UX・Excel/VBA・データ/PWA・高圧則）を2周して直した。内容は CHANGELOG.md の 0.3.0。
+- 5分野の専門家レビュー（潜水表・UI/UX・Excel/VBA・データ/PWA・高圧則）を3周して直した。最後の確認で重大・高の指摘なし。内容は CHANGELOG.md の 0.3.0。
 - テスト：計算 58件、台帳の往復・取り込み・静的点検、画面の e2e（Playwright）。CI で全部流れる。
 
 ## まだ確かめていないこと
+手順と期待する結果は「実機確認の手順.md」にまとめてある（訓練1回分で、スマホ→メール→Excel を通しで試す）。
 1. マクロを実際の Windows 版 Excel 2019 で動かすこと（取り込み・更新・削除・PDF・潜水表の書き出し）。Python 版では同じ手順を確認済み。
 2. 現場用スマホから署のメールへ、CSV の添付が消されずに届くか。
 3. iPhone / Android の実機で、ホーム画面に追加してオフラインで動くか。新しい版の知らせが出るか。

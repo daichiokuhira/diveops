@@ -1025,6 +1025,7 @@ function sheetEdit() {
     <label class="field"><span>5mで止まった時間（分）</span><input class="input num" id="e-stop" inputmode="numeric" value="${esc(d.decoStopDone ?? d.stopMin ?? '')}"></label>
   </div>
   <p class="small">減圧停止が必要な判定になる修正では、5mで実際に止まった時間を入れてください。表の停止時間より短いと、次の潜水は計算しません。</p>
+  <div class="field"><span>5mの安全停止</span><div class="chips">${['有', '無'].map(v => `<button class="chip" data-act="edit-safety" data-v="${v}" aria-pressed="${(sheet.safety ?? (d.safetyStop ? '有' : '無')) === v}">${ic('check')}${v}</button>`).join('')}</div></div>
   <div class="field"><span>体調異常</span><div class="chips">${['無', '有'].map(v => `<button class="chip" data-act="edit-cond" data-v="${v}" aria-pressed="${(sheet.cond ?? d.condition) === v}">${ic('check')}${v}</button>`).join('')}</div></div>
   <label class="field"><span>備考</span><input class="input" id="e-note" value="${esc(d.note ?? '')}"></label>
   <label class="field"><span>直す・削除する理由<b>必須</b></span><input class="input" id="e-why" placeholder="例：深度計の読み違い"></label>
@@ -1033,7 +1034,7 @@ function sheetEdit() {
   <hr class="rule">
   <button class="btn btn-quiet" data-act="delete-dive">${ic('trash-2')}この記録を削除（削除した記録も署へ送るCSVに残ります）</button>`;
 }
-const diveSummary = d => `${hm(d.startAt)}→${hm(d.endAt)} ${d.maxDepth ?? '—'}m ${d.adt ?? '—'}分 開始圧${d.startP ?? '—'} 終了圧${d.endP ?? '—'} 5m停止${d.decoStopDone ?? d.stopMin ?? '—'}分 体調${d.condition || '—'}`;
+const diveSummary = d => `${hm(d.startAt)}→${hm(d.endAt)} ${d.maxDepth ?? '—'}m ${d.adt ?? '—'}分 開始圧${d.startP ?? '—'} 終了圧${d.endP ?? '—'} 安全停止${d.safetyStop ? '有' : '無'} 5m停止${d.decoStopDone ?? d.stopMin ?? '—'}分 体調${d.condition || '—'}`;
 
 /* ----- 見本を消す ----- */
 function sheetClearSample() {
@@ -1471,6 +1472,7 @@ document.addEventListener('click', async e => {
 
     /* 修正 */
     case 'edit-cond': sheet.cond = el.dataset.v; readEditInputsToSheet(); renderSheet(); restoreEditInputs(); break;
+    case 'edit-safety': sheet.safety = el.dataset.v; readEditInputsToSheet(); renderSheet(); restoreEditInputs(); break;
     case 'save-edit': {
       const dv = inc.divers[sheet.i], d = dv.dives[sheet.k];
       const st = isoFromHM(d.startAt, $('#e-start').value), en = isoFromHM(d.startAt, $('#e-end').value);
@@ -1492,7 +1494,10 @@ document.addEventListener('click', async e => {
       d.startAt = ns; d.endAt = ne;
       if (d.ascentAt && (d.ascentAt < d.startAt || d.ascentAt > d.endAt)) d.ascentAt = null;
       [d.maxDepth, d.adt, d.startP, d.endP] = vals.slice(0, 4).map(v => (v === '' ? null : v));
-      d.stopMin = vals[4] === '' ? 0 : vals[4]; d.decoStopDone = vals[4] === '' ? null : vals[4];
+      d.safetyStop = (sheet.safety ?? (d.safetyStop ? '有' : '無')) === '有';
+      // 5mの停止時間が空なら、安全停止をした場合はその分（3分）を入れる
+      const stopDefault = d.safetyStop ? (incidentTable(inc).data.rules?.safetyStopMinutes ?? 3) : 0;
+      d.stopMin = vals[4] === '' ? stopDefault : vals[4]; d.decoStopDone = vals[4] === '' ? null : vals[4];
       d.condition = sheet.cond ?? d.condition; d.note = $('#e-note').value.trim();
       (d.edits ||= []).push({ at: nowISO(), why, before }); d.updatedAt = nowISO();
       touch(inc); saved(); sheet = { name: 'diver', i: sheet.i }; render(); toast('修正しました', true); break;
@@ -1591,7 +1596,7 @@ function readUpInputs() {
   sheet.decoStop = $('#u-deco')?.value.trim() ?? sheet.decoStop;
 }
 let editBuf = null, incBuf = null;
-function readEditInputsToSheet() { editBuf = ['#e-start', '#e-end', '#e-depth', '#e-adt', '#e-startp', '#e-endp', '#e-note'].map(id => [id, $(id)?.value]); editBuf.push(['#e-first', $('#e-first')?.checked]); }
+function readEditInputsToSheet() { editBuf = ['#e-start', '#e-end', '#e-depth', '#e-adt', '#e-startp', '#e-endp', '#e-stop', '#e-note', '#e-why'].map(id => [id, $(id)?.value]); editBuf.push(['#e-first', $('#e-first')?.checked]); }
 function restoreEditInputs() { (editBuf || []).forEach(([id, v]) => { const el = $(id); if (!el) return; if (id === '#e-first') el.checked = v; else el.value = v; }); }
 function readIncInputsToSheet() { incBuf = ['#i-title', '#i-site', '#i-cmd', '#i-watch', '#i-gas', '#i-temp', '#i-vis', '#i-sea', '#i-memo'].map(id => [id, $(id)?.value]); }
 function restoreIncInputs() { (incBuf || []).forEach(([id, v]) => { const el = $(id); if (el) el.value = v; }); }
