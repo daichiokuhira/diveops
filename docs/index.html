@@ -1597,10 +1597,10 @@ function importPastCSV(text) {
     const id = F(r, '記録ID') || `imp-${iid}-${mid}-${no || 'L' + line}`;
     if (!okText(id)) { bad++; badRows.push(line); return; }
     if (known.has(id)) { skipped++; return; }
-    if (!nameOf(mid)) { S.members.push({ id: mid, name: F(r, '氏名') || `職員番号 ${mid}`, status: '在籍', quals: [] }); newMembers++; }
     let inc = S.incidents.find(i => i.id === iid);
     if (inc && !inc.imported) { appRows.push(line); return; } // このスマホで記録した事案は、取り込みで変えない
     if (inc && no && inc.divers.some(d => d.memberId === mid && d.dives.some(x => String(x.importNo) === String(Number(no) || no)))) { skipped++; return; }
+    if (!nameOf(mid)) { S.members.push({ id: mid, name: F(r, '氏名') || `職員番号 ${mid}`, status: '在籍', quals: [] }); newMembers++; }
     if (!inc) {
       const st = F(r, '事案開始'), en = F(r, '事案終了');
       const created = isoFromYmdHm(st || F(r, '日付'), st ? st.split(' ')[1] : F(r, '潜降時刻')) || startAt;
