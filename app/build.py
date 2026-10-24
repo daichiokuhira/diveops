@@ -52,6 +52,9 @@ shutil.copy(src/'manifest.webmanifest', dist/'manifest.webmanifest')
 (ROOT/'app'/'preview').mkdir(exist_ok=True)
 (ROOT/'app'/'preview'/'diveops.html').write_text(preview)
 shutil.copy(ROOT/'app'/'設置と使い方.md', dist/'設置と使い方.md')
+# Excel 出力の部品（MIT）。index.html とは分け、出力するときに読み込む
+shutil.copy(ROOT/'app'/'vendor'/'exceljs.min.js', dist/'exceljs.min.js')
+shutil.copy(ROOT/'app'/'vendor'/'exceljs.LICENSE.txt', dist/'exceljs.LICENSE.txt')
 for n in ('icon-192.png', 'icon-512.png', 'apple-touch-icon.png'):
     if (src/n).exists(): shutil.copy(src/n, dist/n)
 print('built', build, len(full)//1024, 'KB')

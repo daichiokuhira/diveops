@@ -528,7 +528,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
 const BUILTIN_TABLE = JSON.parse(document.getElementById('builtin-table').textContent);
 const BUILTIN_ID = 'builtin:' + BUILTIN_TABLE.version;
 const LS_KEY = 'diveops.v1';
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.4.0';
 const TZ = 'Asia/Tokyo';
 const TYPES = ['災害', '訓練', '研修', 'その他'];
 
@@ -565,10 +565,10 @@ function isoFromHM(baseISO, hhmm) {
 /* ---------- 保存 ---------- */
 function sampleState() {
   const members = [
-    { id: 'S01', name: '見本 一郎', sample: true },
-    { id: 'S02', name: '見本 二郎', sample: true },
-    { id: 'S03', name: '見本 三郎', sample: true },
-    { id: 'S04', name: '見本 四郎', sample: true }
+    { id: 'S01', name: '見本 一郎', sample: true, unit: '本署', status: '在籍', quals: [{ id: 'sq1', kind: '資格', name: '潜水士免許', date: '2012-06-01' }, { id: 'sq2', kind: '研修', name: '水難救助研修', date: '2016-10-01', no: '第15期' }] },
+    { id: 'S02', name: '見本 二郎', sample: true, unit: '本署', status: '在籍', quals: [{ id: 'sq3', kind: '資格', name: '潜水士免許', date: '2018-05-01' }, { id: 'sq4', kind: '資格', name: '小型船舶1級', date: '2020-04-01', expires: '2025-03-31' }] },
+    { id: 'S03', name: '見本 三郎', sample: true, unit: '伊良部分署', status: '在籍', quals: [{ id: 'sq5', kind: '資格', name: '潜水士免許', date: '2021-07-01' }] },
+    { id: 'S04', name: '見本 四郎', sample: true, unit: '伊良部分署', status: '在籍', quals: [] }
   ];
   const base = new Date(Date.now() - 3 * 86400000);
   const at = (h, m) => isoFromHM(base.toISOString(), `${h}:${String(m).padStart(2, '0')}`);
@@ -591,23 +591,51 @@ function sampleState() {
     incidents: [inc]
   };
 }
-let loadNote = '';
-function load() {
+/* 記録の保存先は IndexedDB（容量が大きい）。使えない環境では localStorage。
+   v0.3.0 までの localStorage の記録は、初回起動時に IndexedDB へ移す */
+const IDB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('diveops', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked'));
+    });
+  },
+  async tx(mode, fn) {
+    this.db ||= await this.open();
+    return new Promise((res, rej) => { const t = this.db.transaction('kv', mode); const out = fn(t.objectStore('kv')); t.oncomplete = () => res(out?.result); t.onerror = t.onabort = () => rej(t.error); });
+  },
+  get(k) { return this.tx('readonly', st => st.get(k)); },
+  put(k, v) { return this.tx('readwrite', st => { st.put(v, k); }); }
+};
+const okState = s => s && s.v === 1 && Array.isArray(s.incidents) && Array.isArray(s.members);
+let loadNote = '', useLS = false, migratedRaw = null;
+async function load() {
   let raw = null;
-  try { raw = localStorage.getItem(LS_KEY); } catch (e) { return sampleState(); }
-  if (!raw) return sampleState();
-  try { const s = JSON.parse(raw); if (s && s.v === 1 && Array.isArray(s.incidents)) return s; } catch (e) {}
+  try { raw = await IDB.get('state'); } catch (e) { useLS = true; }
+  if (raw == null) { try { const l = localStorage.getItem(LS_KEY); if (l) { raw = l; if (!useLS) migratedRaw = l; } } catch (e) {} }
+  if (raw == null) return sampleState();
+  try { const s = JSON.parse(raw); if (okState(s)) return s; } catch (e) {}
   // 壊れた記録は消さずに別の場所へ退避してから始める
-  try { localStorage.setItem(LS_KEY + '.broken.' + Date.now(), raw); } catch (e) {}
+  try { if (useLS) localStorage.setItem(LS_KEY + '.broken.' + Date.now(), raw); else await IDB.put('broken.' + Date.now(), raw); } catch (e) {}
+  migratedRaw = null;
   loadNote = '前回の記録を読み込めませんでした。読めなかったデータは端末内に退避してあります。';
   return { ...sampleState(), members: [], incidents: [] };
 }
-let S = load();
-S.settings = { lastBackup: null, ...S.settings };
-let storageOK = true;
+let S = { ...sampleState(), members: [], incidents: [] }; // 読み込むまでの仮の中身
+let ready = false, storageOK = true, saveChain = Promise.resolve();
+// 保存は順番に行う（後の保存が先の保存を追い越さない）。失敗したらその場で知らせる
 function save() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(S)); storageOK = true; }
-  catch (e) { storageOK = false; }
+  const json = JSON.stringify(S);
+  saveChain = saveChain.then(async () => {
+    if (useLS) localStorage.setItem(LS_KEY, json); else await IDB.put('state', json);
+    if (migratedRaw) { try { localStorage.setItem(LS_KEY + '.before-idb', migratedRaw); localStorage.removeItem(LS_KEY); } catch (e) {} migratedRaw = null; }
+    if (!storageOK) { storageOK = true; render(); }
+  }).catch(() => {
+    const was = storageOK; storageOK = false;
+    if (was) { render(); toast('保存できませんでした。この記録は端末に残っていません'); }
+  });
   return storageOK;
 }
 let persisted = null;
@@ -622,6 +650,17 @@ function tableLabel(t) { return t ? `${t.data.name}・${t.data.version}` : '—'
 function incidentTable(inc) {
   return tableById(inc.tableId) || (inc.tableSnap ? { id: inc.tableId, data: inc.tableSnap, snap: true } : { ...activeTable(), missing: true });
 }
+
+/* ---------- 隊員 ---------- */
+const isActive = m => (m.status || '在籍') === '在籍';
+const activeMembers = () => S.members.filter(isActive);
+const QUAL_NAMES = ['潜水士免許', '水難救助研修', '小型船舶1級', '小型船舶2級', '特殊小型船舶', '救急救命士', 'BLSインストラクター'];
+// 資格の有効性：期限が過ぎていれば × 期限切れ
+function qualState(q, at = nowISO()) {
+  if (!q.expires) return 'ok';
+  return q.expires < ymd(at).replaceAll('/', '-') ? 'expired' : 'ok';
+}
+function hasQual(m, name) { return (m.quals || []).some(q => q.name === name && qualState(q) === 'ok'); }
 
 /* ---------- 計算 ---------- */
 const member = id => S.members.find(m => m.id === id) || { id, name: `職員番号 ${id}` };
@@ -702,11 +741,12 @@ function globalAlerts() {
   return a.length || upd ? `<div class="wrap wrap-alert">${a.map(t => `<div class="alert" role="alert">${ic('triangle-alert')}<span>${esc(t)}</span></div>`).join('')}${upd}</div>` : '';
 }
 function render() {
+  if (!ready) return;
   applyTheme();
   const app = $('#app');
   const v = {
     home: viewHome, new: viewNew, board: viewBoard, summary: viewSummary,
-    tables: viewTables, settings: viewSettings, calc: viewCalc
+    tables: viewTables, settings: viewSettings, calc: viewCalc, records: viewRecords
   }[view.name] || viewHome;
   app.innerHTML = v();
   renderSheet();
@@ -716,7 +756,7 @@ function render() {
 function renderSheet() {
   const box = $('#sheet');
   if (!sheet) { box.innerHTML = ''; box.hidden = true; document.body.style.overflow = ''; if (sheetOpener?.isConnected) sheetOpener.focus(); sheetOpener = null; return; }
-  const fn = { down: sheetDown, up: sheetUp, diver: sheetDiver, edit: sheetEdit, addDiver: sheetAddDiver, editInc: sheetEditInc, clearSample: sheetClearSample }[sheet.name];
+  const fn = { member: sheetMember, down: sheetDown, up: sheetUp, diver: sheetDiver, edit: sheetEdit, addDiver: sheetAddDiver, editInc: sheetEditInc, clearSample: sheetClearSample }[sheet.name];
   const wasOpen = !box.hidden;
   box.innerHTML = `<div class="sheet-back" data-act="sheet-close-back"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${fn()}</div></div>`;
   if (!wasOpen) { $('#sheet-title')?.focus(); $('#toast').hidden = true; }
@@ -740,6 +780,7 @@ function viewHome() {
     ${active.length ? `<section class="stack"><h2>進行中</h2><div class="list">${active.map(incRow).join('')}</div></section>` : ''}
     <section class="stack">
       <button class="btn btn-primary btn-big btn-block" data-act="go" data-to="new">${ic('plus')}新しい事案を始める</button>
+      <button class="btn btn-block" data-act="go" data-to="records">${ic('users')}記録・経歴簿（Excel出力）</button>
       <div class="grid2">
         <button class="btn" data-act="go" data-to="calc">${ic('calculator')}空気の計算</button>
         <button class="btn" data-act="go" data-to="tables">${ic('table-2')}潜水表</button>
@@ -794,7 +835,7 @@ function viewNew() {
       </div>
     </section>
     <section class="stack"><h2>潜水員（あとで追加できます）</h2>
-      ${S.members.length ? `<div class="chips">${S.members.map(m => `<button class="chip" data-act="draft-diver" data-v="${esc(m.id)}" aria-pressed="${draft.divers.includes(m.id)}">${ic('check')}${esc(m.name)}</button>`).join('')}</div>`
+      ${S.members.length ? `<div class="chips">${activeMembers().map(m => `<button class="chip" data-act="draft-diver" data-v="${esc(m.id)}" aria-pressed="${draft.divers.includes(m.id)}">${ic('check')}${esc(m.name)}</button>`).join('')}</div>`
         : `<p class="small">隊員が登録されていません。<button class="link" data-act="go" data-to="settings">設定で隊員を登録</button></p>`}
     </section>
     <label class="check"><input type="checkbox" id="n-strict" ${draft.strict ? 'checked' : ''}><span>低水温・重作業のため、計算を1段階厳しくする<br><span class="small">NAUIの使い方に沿って、グループを1つ重い側にします。</span></span></label>
@@ -810,7 +851,7 @@ function readDraft() {
   draft.strict = $('#n-strict')?.checked ?? draft.strict;
 }
 
-const memberSelect = (id, cur) => `<select class="input" id="${id}"><option value="">選ぶ</option>${S.members.map(m => `<option value="${esc(m.id)}" ${cur === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>`;
+const memberSelect = (id, cur) => `<select class="input" id="${id}"><option value="">選ぶ</option>${S.members.filter(m => isActive(m) || m.id === cur).map(m => `<option value="${esc(m.id)}" ${cur === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>`;
 
 /* ===== 潜水員ボード ===== */
 function viewBoard() {
@@ -1036,6 +1077,41 @@ function sheetEdit() {
 }
 const diveSummary = d => `${hm(d.startAt)}→${hm(d.endAt)} ${d.maxDepth ?? '—'}m ${d.adt ?? '—'}分 開始圧${d.startP ?? '—'} 終了圧${d.endP ?? '—'} 安全停止${d.safetyStop ? '有' : '無'} 5m停止${d.decoStopDone ?? d.stopMin ?? '—'}分 体調${d.condition || '—'}`;
 
+/* ----- 隊員の詳細（所属・在籍・資格・研修） ----- */
+function sheetMember() {
+  const m = S.members.find(x => x.id === sheet.id);
+  if (!m) return sheetHead('隊員');
+  const used = S.incidents.some(i => i.commanderId === m.id || i.watchId === m.id || i.divers.some(d => d.memberId === m.id));
+  sheet.kind ??= '資格';
+  const qs = [...(m.quals || [])].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  return `${sheetHead(esc(m.name))}
+  <div class="grid2">
+    <label class="field"><span>氏名</span><input class="input" id="p-name" value="${esc(m.name)}"></label>
+    <label class="field"><span>所属</span><input class="input" id="p-unit" value="${esc(m.unit || '')}" placeholder="例：伊良部分署"></label>
+  </div>
+  <div class="field"><span>在籍状態</span><div class="chips">${['在籍', '異動', '退職'].map(v => `<button class="chip" data-act="p-status" data-v="${v}" aria-pressed="${(sheet.status ?? m.status ?? '在籍') === v}">${ic('check')}${v}</button>`).join('')}</div>
+    <p class="small">異動・退職にすると、潜水員の候補から外れます。過去の記録は残ります。</p></div>
+  <button class="btn btn-primary btn-block" data-act="save-member">${ic('check')}保存</button>
+  <section class="stack"><h2>資格・研修（${qs.length}件）</h2>
+    ${qs.length ? `<div class="list">${qs.map(q => `<div class="row" style="padding-block:.6rem"><div class="item-main"><div class="item-title">${qualState(q) === 'expired' ? '× ' : ''}${esc(q.name)}<span class="small">（${esc(q.kind)}）</span></div>
+      <div class="small num">${esc(q.date || '日付なし')}${q.expires ? `・期限 ${esc(q.expires)}${qualState(q) === 'expired' ? '・<b>期限切れ</b>' : ''}` : ''}${q.no ? `・${esc(q.no)}` : ''}${q.note ? `・${esc(q.note)}` : ''}</div></div>
+      <button class="btn btn-icon" data-act="del-qual" data-id="${esc(q.id)}" aria-label="${esc(q.name)}を削除">${ic('trash-2')}</button></div>`).join('')}</div>` : '<p class="small">まだありません。</p>'}
+  </section>
+  <section class="stack"><h2>資格・研修を追加</h2>
+    <div class="chips">${['資格', '研修'].map(v => `<button class="chip" data-act="q-kind" data-v="${v}" aria-pressed="${sheet.kind === v}">${ic('check')}${v}</button>`).join('')}</div>
+    <label class="field"><span>名称<b>必須</b></span><input class="input" id="q-name" list="qual-list" placeholder="例：潜水士免許"></label>
+    <datalist id="qual-list">${QUAL_NAMES.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+    <div class="grid2">
+      <label class="field"><span>取得・修了日<b>必須</b></span><input class="input num" id="q-date" type="date"></label>
+      <label class="field"><span>有効期限（あれば）</span><input class="input num" id="q-exp" type="date"></label>
+    </div>
+    <label class="field"><span>期別・番号（任意）</span><input class="input" id="q-no" placeholder="例：第25期"></label>
+    <label class="field"><span>備考（任意）</span><input class="input" id="q-note"></label>
+    <button class="btn btn-block" data-act="add-qual">${ic('plus')}追加</button>
+  </section>
+  ${used ? '<p class="small">記録に使われている隊員は削除できません。異動・退職にしてください。</p>' : `<button class="btn btn-quiet" data-act="del-member" data-id="${esc(m.id)}">${ic('trash-2')}この隊員を削除</button>`}`;
+}
+
 /* ----- 見本を消す ----- */
 function sheetClearSample() {
   const sm = S.members.filter(m => m.sample), ids = sm.map(m => m.id);
@@ -1051,7 +1127,7 @@ function sheetClearSample() {
 function sheetAddDiver() {
   const inc = curInc();
   const inIds = inc.divers.map(d => d.memberId);
-  const cand = S.members.filter(m => !inIds.includes(m.id));
+  const cand = activeMembers().filter(m => !inIds.includes(m.id));
   return `${sheetHead('潜水員を追加')}
   ${cand.length ? `<div class="list">${cand.map(m => `<button class="item" data-act="add-diver" data-v="${esc(m.id)}"><div class="item-main"><div class="item-title">${esc(m.name)}</div><div class="small num">職員番号 ${esc(m.id)}</div></div>${ic('plus')}</button>`).join('')}</div>`
     : `<p>追加できる隊員がいません。<button class="link" data-act="go" data-to="settings">設定で隊員を登録</button></p>`}`;
@@ -1148,25 +1224,264 @@ function ascentRate(d) {
 // 前の潜水や事案を直すと後の潜水の計算も変わるので、事案の更新日時と比べて新しい方を記録更新日時にする
 const stamp = list => { const t = list.filter(Boolean).sort().pop(); return t ? `${ymd(t)} ${hms(t)}` : ''; };
 function buildCSV(inc) {
-  const t = incidentTable(inc);
   // カンマ・引用符・改行を囲む。= + - @ で始まる文字は、Excelで直接開いても数式にならないよう ' を付ける
   const q = v => { let s = String(v ?? ''); if (typeof v === 'string' && /^[=+\-@\t]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const num = v => (v == null || v === '' ? '' : Number(v));
   const lines = [CSV_HEAD.map(q).join(',')];
-  csvRows(inc).forEach(r => {
-    const x = r.res;
-    const edits = r.edits?.length ? `${r.edits.length}回・最終 ${ymd(r.edits[r.edits.length - 1].at)} ${hm(r.edits[r.edits.length - 1].at)}` : '';
-    lines.push([ymd(r.startAt), String(r.memberId), r.name, inc.type, inc.title, inc.site, num(r.maxDepth), num(r.adt), r.si, num(r.tank), num(r.startP), num(r.endP), inc.waterTemp, inc.visibility,
-      x.status === 'deco' ? '有' : '無', r.condition || '', inc.commanderId ? member(inc.commanderId).name : '', r.note || '',
-      inc.id, r.no, hm(r.startAt), hm(r.endAt), x.tableDepth ?? '', x.group ?? '', x.rnt ?? '', x.tnt ?? '', x.mdt ?? '', x.amdt ?? '', statusText(x), x.stop5 ?? '', tableLabel(t), inc.sea, inc.memo,
-      `${ymd(inc.createdAt)} ${hm(inc.createdAt)}`, inc.closedAt ? `${ymd(inc.closedAt)} ${hm(inc.closedAt)}` : '',
-      r.id, r.deleted ? '削除' : '記録', num(r.plannedDepth), r.ascentAt ? hm(r.ascentAt) : '', r.safetyStop ? '有' : '無', ...(r.stopMin || r.decoStopDone != null ? [5, num(r.stopMin)] : ['', '']), ascentRate(r),
-      inc.gas ?? '空気', inc.watchId ? member(inc.watchId).name : '', r.treatAsFirst ? '指揮者判断' : '', edits,
-      stamp([r.updatedAt || r.endAt, inc.updatedAt])].map(q).join(','));
-  });
-  return '﻿' + lines.join('\r\n') + '\r\n';
+  csvRows(inc).forEach(r => lines.push(csvValues(inc, r).map(q).join(',')));
+  return '\ufeff' + lines.join('\r\n') + '\r\n';
+}
+// 1本分の値（CSV と Excel の「潜水記録」シートで共通。並びは CSV_HEAD と同じ）
+function csvValues(inc, r) {
+  const t = incidentTable(inc);
+  const num = v => (v == null || v === '' ? '' : Number(v));
+  const x = r.res;
+  const edits = r.edits?.length ? `${r.edits.length}回・最終 ${ymd(r.edits[r.edits.length - 1].at)} ${hm(r.edits[r.edits.length - 1].at)}` : '';
+  return [ymd(r.startAt), String(r.memberId), r.name, inc.type, inc.title, inc.site, num(r.maxDepth), num(r.adt), r.si, num(r.tank), num(r.startP), num(r.endP), inc.waterTemp, inc.visibility,
+    x.status === 'deco' ? '有' : '無', r.condition || '', inc.commanderId ? member(inc.commanderId).name : '', r.note || '',
+    inc.id, r.no, hm(r.startAt), hm(r.endAt), x.tableDepth ?? '', x.group ?? '', x.rnt ?? '', x.tnt ?? '', x.mdt ?? '', x.amdt ?? '', statusText(x), x.stop5 ?? '', tableLabel(t), inc.sea, inc.memo,
+    `${ymd(inc.createdAt)} ${hm(inc.createdAt)}`, inc.closedAt ? `${ymd(inc.closedAt)} ${hm(inc.closedAt)}` : '',
+    r.id, r.deleted ? '削除' : '記録', num(r.plannedDepth), r.ascentAt ? hm(r.ascentAt) : '', r.safetyStop ? '有' : '無', ...(r.stopMin || r.decoStopDone != null ? [5, num(r.stopMin)] : ['', '']), ascentRate(r),
+    inc.gas ?? '空気', inc.watchId ? member(inc.watchId).name : '', r.treatAsFirst ? '指揮者判断' : '', edits,
+    stamp([r.updatedAt || r.endAt, inc.updatedAt])];
 }
 const csvName = inc => `潜水記録_${ymdCompact(inc.createdAt)}_${incTitle(inc).replace(/[\\/:*?"<>|\s]/g, '')}.csv`;
+
+/* ===== 記録・経歴簿 ===== */
+// 年度（4月始まり）
+const fiscalStart = iso => { const [y, m] = ymd(iso).split('/').map(Number); return `${m >= 4 ? y : y - 1}/04/01`; };
+function periodRange(p) {
+  const y = ymd(nowISO()).slice(0, 4);
+  if (p.kind === 'fy') { const st = fiscalStart(nowISO()); return [st, `${Number(st.slice(0, 4)) + 1}/03/31`]; }
+  if (p.kind === 'year') return [`${y}/01/01`, `${y}/12/31`];
+  if (p.kind === 'custom') return [(p.from || '0000-01-01').replaceAll('-', '/'), (p.to || '9999-12-31').replaceAll('-', '/')];
+  return ['0000/01/01', '9999/12/31'];
+}
+// 全事案から、ある隊員の潜水（削除したものを除く）を集める
+function diveRowsFor(memberId) {
+  const out = [];
+  S.incidents.forEach(inc => inc.divers.forEach(dv => {
+    if (dv.memberId !== memberId) return;
+    const res = diverResults(inc, dv);
+    dv.dives.forEach((d, k) => { if (!d.deleted) out.push({ inc, d, r: res[k], no: k + 1, date: ymd(d.startAt) }); });
+  }));
+  return out.sort((a, b) => String(a.d.startAt).localeCompare(String(b.d.startAt)));
+}
+function memberStats(m, range) {
+  const all = diveRowsFor(m.id);
+  const rows = all.filter(x => x.date >= range[0] && x.date <= range[1]);
+  const fy = fiscalStart(nowISO());
+  return {
+    rows, count: rows.length, minutes: rows.reduce((a, x) => a + (Number(x.d.adt) || 0), 0),
+    maxDepth: rows.reduce((a, x) => Math.max(a, Number(x.d.maxDepth) || 0), 0) || null,
+    lastDate: all.length ? all[all.length - 1].date : null, fyCount: all.filter(x => x.date >= fy).length,
+    license: hasQual(m, '潜水士免許'),
+    training: (m.quals || []).filter(q => q.kind === '研修').map(q => q.name + (q.no ? `（${q.no}）` : '')),
+    boat: (m.quals || []).filter(q => /小型船舶/.test(q.name)).map(q => q.name + (qualState(q) === 'expired' ? '（期限切れ）' : ''))
+  };
+}
+let rec = { period: { kind: 'fy', from: '', to: '' }, ids: null, showAll: false };
+function viewRecords() {
+  if (!rec.ids) rec.ids = activeMembers().map(m => m.id);
+  const range = periodRange(rec.period);
+  const list = S.members.filter(m => rec.showAll || isActive(m) || rec.ids.includes(m.id));
+  const sel = S.members.filter(m => rec.ids.includes(m.id));
+  return `${bar('記録・経歴簿', '', true)}
+  <main class="wrap">
+    <section class="stack"><h2>期間</h2>
+      <div class="chips">${[['fy', '今年度'], ['year', '今年'], ['all', 'すべて'], ['custom', '期間を指定']].map(([v, l]) => `<button class="chip" data-act="rec-period" data-v="${v}" aria-pressed="${rec.period.kind === v}">${ic('check')}${l}</button>`).join('')}</div>
+      ${rec.period.kind === 'custom' ? `<div class="grid2"><label class="field"><span>から</span><input class="input num" type="date" id="rec-from" value="${esc(rec.period.from)}"></label><label class="field"><span>まで</span><input class="input num" type="date" id="rec-to" value="${esc(rec.period.to)}"></label></div>` : ''}
+      <p class="small num">${range[0] === '0000/01/01' ? 'すべての期間' : `${range[0]}〜${range[1]}`}</p>
+    </section>
+    <section class="stack"><h2>隊員（${sel.length}人を選択中）</h2>
+      <div class="grid2"><button class="btn" data-act="rec-all">${ic('check')}全員を選ぶ</button><button class="btn" data-act="rec-none">選択を外す</button></div>
+      ${list.length ? `<div class="chips">${list.map(m => `<button class="chip" data-act="rec-member" data-v="${esc(m.id)}" aria-pressed="${rec.ids.includes(m.id)}">${ic('check')}${esc(m.name)}${isActive(m) ? '' : `（${esc(m.status)}）`}</button>`).join('')}</div>` : '<p class="small">隊員が登録されていません。設定で登録してください。</p>'}
+      <label class="check"><input type="checkbox" id="rec-showall" ${rec.showAll ? 'checked' : ''}><span>異動・退職の隊員も表示する</span></label>
+    </section>
+    <section class="stack"><h2>経歴簿</h2>
+      ${sel.length ? `<div class="list">${sel.map(m => { const st = memberStats(m, range); return `<div class="stack" style="padding-block:1rem">
+        <div class="item-title">${esc(m.name)} <span class="small num">職員番号 ${esc(m.id)}${m.unit ? `・${esc(m.unit)}` : ''}</span></div>
+        <dl class="kv small num"><dt>本数</dt><dd>${st.count}本（${hmText(st.minutes)}）</dd><dt>最大水深</dt><dd>${st.maxDepth ?? '—'}m</dd>
+          <dt>最終潜水日</dt><dd>${st.lastDate ?? '—'}</dd><dt>今年度</dt><dd>${st.fyCount}本</dd>
+          <dt>潜水士免許</dt><dd>${st.license ? '有' : '<b>× なし・期限切れ</b>'}</dd><dt>研修</dt><dd>${esc(st.training.join('、') || '—')}</dd></dl>
+        ${st.rows.length ? `<div class="small num">${st.rows.slice(-5).reverse().map(x => `<div>${x.date}　${esc(x.inc.type)}　${esc(incTitle(x.inc))}　${x.d.maxDepth ?? '—'}m ${x.d.adt ?? '—'}分　${statusText(x.r)}</div>`).join('')}</div>${st.rows.length > 5 ? `<p class="small">ほか ${st.rows.length - 5}本（Excelにはすべて出ます）</p>` : ''}` : '<p class="small">この期間の潜水はありません。</p>'}
+      </div>`; }).join('')}</div>` : '<p class="small">隊員を選んでください。</p>'}
+    </section>
+    <p class="small">アプリに入っているのは、このスマホで記録した潜水と、取り込んだ過去の記録だけです。正本は署に保存してください。</p>
+  </main>
+  <div class="dock"><div class="dock-in"><button class="btn btn-primary btn-big" data-act="rec-xlsx" ${sel.length ? '' : 'disabled'}>${ic('download')}Excelで出力（${sel.length}人）</button></div></div>`;
+}
+
+/* ----- Excel 出力（ExcelJS をその場で読み込む。一度開いていれば電波がなくても動く） ----- */
+let excelLib = null;
+function loadExcel() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  return excelLib ||= new Promise((res, rej) => {
+    const sc = document.createElement('script'); sc.src = 'exceljs.min.js';
+    sc.onload = () => res(window.ExcelJS); sc.onerror = () => { excelLib = null; rej(new Error('load')); };
+    document.head.appendChild(sc);
+  });
+}
+async function buildWorkbook(ids, range) {
+  const ExcelJS = await loadExcel();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = '潜水現場記録'; wb.created = new Date();
+  const F = (o = {}) => ({ name: '游ゴシック', size: 10.5, color: { argb: 'FF000000' }, ...o });
+  const thin = { style: 'thin', color: { argb: 'FF000000' } }, box = { top: thin, left: thin, bottom: thin, right: thin };
+  const today = ymd(nowISO()), period = range[0] === '0000/01/01' ? 'すべての期間' : `${range[0]}〜${range[1]}`;
+  const members = S.members.filter(m => ids.includes(m.id));
+  const used = new Set();
+  const sheetName = base => { base = base.replace(/[\\/?*[\]:]/g, '').slice(0, 28) || '隊員'; let n = base, k = 2; while (used.has(n)) n = `${base.slice(0, 26)}${k++}`; used.add(n); return n; };
+  const fit = (ws, landscape) => { ws.pageSetup = { paperSize: 9, orientation: landscape ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, blackAndWhite: true, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } }; };
+  const stats = {};
+  members.forEach(m => { stats[m.id] = memberStats(m, range); });
+
+  // 隊員一覧
+  const wl = wb.addWorksheet(sheetName('隊員一覧'));
+  wl.getCell('A1').value = '隊員一覧'; wl.getCell('A1').font = F({ size: 14, bold: true });
+  wl.getCell('A2').value = `期間：${period}`; wl.getCell('K2').value = `出力日 ${today}`;
+  const LH = ['職員番号', '氏名', '所属', '在籍', '潜水士免許', '研修', '小型船舶', '本数（期間）', '潜水時間（期間・分）', '最大水深（期間・m）', '最終潜水日', '今年度本数'];
+  const lh = wl.getRow(4); LH.forEach((h, i) => { const c = lh.getCell(i + 1); c.value = h; c.font = F({ bold: true }); c.border = box; c.alignment = { wrapText: true, vertical: 'middle' }; });
+  members.forEach((m, k) => {
+    const st = stats[m.id], row = wl.getRow(5 + k);
+    [m.id, m.name, m.unit || '', m.status || '在籍', st.license ? '○' : '×', st.training.join('、'), st.boat.join('、'), st.count, st.minutes, st.maxDepth ?? '', st.lastDate ?? '', st.fyCount]
+      .forEach((v, i) => { const c = row.getCell(i + 1); c.value = v; c.font = F({ bold: i === 4 && !st.license }); c.border = box; });
+  });
+  [10, 14, 12, 7, 10, 22, 16, 9, 12, 12, 12, 9].forEach((w, i) => { wl.getColumn(i + 1).width = w; });
+  fit(wl, true);
+
+  // 経歴簿（1人1シート。台帳の「経歴簿」と同じ並び）
+  members.forEach(m => {
+    const st = stats[m.id];
+    const ws = wb.addWorksheet(sheetName(`経歴簿_${m.name}`));
+    ws.getCell('A1').value = '潜水経歴簿'; ws.getCell('A1').font = F({ size: 14, bold: true });
+    ws.getCell('A2').value = `期間：${period}`;
+    ws.getCell('H2').value = '出力日'; ws.getCell('I2').value = today;
+    const kv = (r, c, label, value) => { const l = ws.getCell(r, c), v = ws.getCell(r, c + 1); l.value = label; v.value = value; l.font = F({ size: 9.5 }); v.font = F({ bold: true }); l.border = box; v.border = box; };
+    kv(4, 2, '職員番号', m.id); kv(4, 5, '氏名', m.name); kv(4, 8, '所属', m.unit || '');
+    kv(5, 2, '潜水士免許', st.license ? '有' : '× なし'); kv(5, 5, '水難救助研修', st.training.filter(t => /水難救助/.test(t)).join('、') || '—'); kv(5, 8, '小型船舶', st.boat.join('、') || '—');
+    kv(6, 2, '本数（期間）', st.count); kv(6, 5, '潜水時間（期間）', `${st.minutes}分`); kv(6, 8, '最大水深', st.maxDepth != null ? `${st.maxDepth}m` : '—');
+    kv(7, 2, '最終潜水日', st.lastDate || '—'); kv(7, 5, '今年度本数', st.fyCount); kv(7, 8, '時間換算', hmText(st.minutes));
+    const H = ['No', '日付', '区分', '事案・訓練名', '地点', '最大水深(m)', '潜水時間(分)', '水面休息(分)', 'グループ', '減圧停止(表の判定)', '体調異常', '指揮者'];
+    const hr = ws.getRow(9); H.forEach((h, i) => { const c = hr.getCell(i + 1); c.value = h; c.font = F({ bold: true, size: 9.5 }); c.border = box; c.alignment = { wrapText: true, vertical: 'middle' }; });
+    st.rows.forEach((x, k) => {
+      const row = ws.getRow(10 + k);
+      [k + 1, x.date, x.inc.type, incTitle(x.inc), x.inc.site || '', x.d.maxDepth ?? '', x.d.adt ?? '', x.r.siMin != null ? Math.floor(x.r.siMin) : '', x.r.group ?? '', x.r.status === 'deco' ? '有' : '無', x.d.condition || '', x.inc.commanderId ? member(x.inc.commanderId).name : '']
+        .forEach((v, i) => { const c = row.getCell(i + 1); c.value = v; c.font = F({ bold: (i === 9 || i === 10) && v === '有' }); c.border = box; });
+    });
+    if (!st.rows.length) ws.getCell('A10').value = 'この期間の潜水はありません。';
+    [5, 11, 7, 22, 14, 9, 9, 9, 8, 10, 8, 12].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    ws.views = [{ state: 'frozen', ySplit: 9 }];
+    fit(ws, true);
+    ws.pageSetup.printTitlesRow = '9:9';
+    ws.headerFooter = { oddFooter: '&C&P / &N　潜水表による判定は計算の目安です' };
+  });
+
+  // 潜水記録（アプリのCSVと同じ48列）
+  const wd = wb.addWorksheet(sheetName('潜水記録'));
+  const dh = wd.getRow(1); CSV_HEAD.forEach((h, i) => { const c = dh.getCell(i + 1); c.value = h; c.font = F({ bold: true, size: 9.5 }); });
+  let rn = 2;
+  members.forEach(m => stats[m.id].rows.forEach(x => {
+    const r = { ...x.d, memberId: m.id, name: m.name, no: x.no, tank: x.d.tank ?? S.settings.tank, si: x.r.siMin != null ? Math.floor(x.r.siMin) : '', res: x.r };
+    const row = wd.getRow(rn++);
+    csvValues(x.inc, r).forEach((v, i) => { if (v !== '' && v != null) { const c = row.getCell(i + 1); c.value = v; c.font = F({ size: 9.5 }); } });
+  }));
+  wd.views = [{ state: 'frozen', ySplit: 1 }];
+  wd.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: CSV_HEAD.length } };
+  CSV_HEAD.forEach((h, i) => { wd.getColumn(i + 1).width = Math.min(22, Math.max(8, h.length * 1.6)); });
+
+  // 資格・研修
+  const wq = wb.addWorksheet(sheetName('資格・研修'));
+  const QH = ['職員番号', '氏名', '種別', '名称', '取得・修了日', '有効期限', '状態', '期別・番号', '備考'];
+  const qh = wq.getRow(1); QH.forEach((h, i) => { const c = qh.getCell(i + 1); c.value = h; c.font = F({ bold: true }); });
+  let qn = 2;
+  members.forEach(m => (m.quals || []).forEach(q => {
+    const row = wq.getRow(qn++);
+    [m.id, m.name, q.kind, q.name, q.date || '', q.expires || '', qualState(q) === 'expired' ? '× 期限切れ' : '', q.no || '', q.note || ''].forEach((v, i) => { const c = row.getCell(i + 1); c.value = v; c.font = F(); });
+  }));
+  [10, 14, 6, 18, 12, 12, 10, 14, 20].forEach((w, i) => { wq.getColumn(i + 1).width = w; });
+  return wb;
+}
+async function exportRecords() {
+  const ids = rec.ids || [], range = periodRange(rec.period);
+  if (!ids.length) { toast('隊員を選んでください'); return; }
+  let wb;
+  try { wb = await buildWorkbook(ids, range); }
+  catch (e) { toast('Excelの部品を読み込めませんでした。一度、電波のある所でアプリを開いてください'); return; }
+  const buf = await wb.xlsx.writeBuffer();
+  const one = ids.length === 1 ? `_${(S.members.find(m => m.id === ids[0])?.name || '').replace(/[\\/:*?"<>|\s]/g, '')}` : `_${ids.length}人`;
+  const name = `潜水経歴簿${one}_${ymdCompact(nowISO())}.xlsx`, type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const r = await shareText(name, buf, type);
+  if (r === 'shared') toast('送る画面を開きました');
+  else if (r === 'unsupported') toast(downloadText(name, buf, type) ? 'Excelファイルを保存しました' : 'この画面では保存できません');
+}
+
+/* ----- 過去の記録の取り込み（台帳の「CSV抽出」で保存したCSV、またはアプリのCSV） ----- */
+function parseCSV(text) {
+  const rows = []; let f = [], cur = '', q = false;
+  text = text.replace(/^﻿/, '');
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ',') { f.push(cur); cur = ''; }
+    else if (ch === '\n') { f.push(cur); rows.push(f); f = []; cur = ''; }
+    else if (ch !== '\r') cur += ch;
+  }
+  if (cur !== '' || f.length) { f.push(cur); rows.push(f); }
+  return rows.filter(r => r.some(v => v.trim() !== ''));
+}
+// 「2025/5/14」「2025-05-14」と「9:20」を日本時間の ISO に
+function isoFromYmdHm(day, hhmm) {
+  const m = String(day || '').match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/), t = String(hhmm || '').match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const p2 = v => String(v).padStart(2, '0');
+  return new Date(`${m[1]}-${p2(m[2])}-${p2(m[3])}T${t ? p2(t[1]) : '00'}:${t ? t[2] : '00'}:00+09:00`).toISOString();
+}
+function importPastCSV(text) {
+  const rows = parseCSV(text);
+  if (rows.length < 2) return { error: 'CSVの中身がありません。' };
+  const h = rows[0].map(x => x.trim());
+  const need = ['日付', '職員番号', '事案ID', '本数'];
+  if (!need.every(n => h.includes(n))) return { error: '台帳の「CSV抽出」か、アプリのCSVではありません（日付・職員番号・事案ID・本数の列が必要です）。' };
+  const unq = v => (/^'[=+\-@\t]/.test(v) ? v.slice(1) : v);
+  const F = (r, n) => { const i = h.indexOf(n); return i < 0 ? '' : unq(String(r[i] ?? '').trim()); };
+  const num = v => { const x = numOrBlank(v); return x === '' || Number.isNaN(x) ? null : x; };
+  const nameOf = v => S.members.find(m => m.id === v);
+  const known = new Set(); S.incidents.forEach(i => i.divers.forEach(d => d.dives.forEach(x => known.add(x.id))));
+  let added = 0, skipped = 0, bad = 0, newMembers = 0, newInc = 0;
+  rows.slice(1).forEach(r => {
+    const iid = F(r, '事案ID'), mid = toHalf(F(r, '職員番号')), no = F(r, '本数');
+    const startAt = isoFromYmdHm(F(r, '日付'), F(r, '潜降時刻'));
+    if (!iid || !mid || !startAt || !/^[0-9A-Za-z_-]+$/.test(mid)) { bad++; return; }
+    if (F(r, '状態') === '削除') { skipped++; return; }
+    const id = F(r, '記録ID') || `imp-${iid}-${mid}-${no}`;
+    if (known.has(id)) { skipped++; return; }
+    if (!nameOf(mid)) { S.members.push({ id: mid, name: F(r, '氏名') || `職員番号 ${mid}`, status: '在籍', quals: [] }); newMembers++; }
+    let inc = S.incidents.find(i => i.id === iid);
+    if (!inc) {
+      const st = F(r, '事案開始'), en = F(r, '事案終了');
+      const created = isoFromYmdHm(st || F(r, '日付'), st ? st.split(' ')[1] : F(r, '潜降時刻')) || startAt;
+      const cmd = S.members.find(m => m.name === F(r, '指揮者')), watch = S.members.find(m => m.name === F(r, '監視員'));
+      inc = { id: iid, imported: true, createdAt: created, updatedAt: nowISO(), sentAt: nowISO(), type: F(r, '区分') || 'その他', title: F(r, '事案・訓練名'), site: F(r, '地点'),
+        commanderId: cmd?.id || '', watchId: watch?.id || '', gas: F(r, '呼吸ガス') || '空気', memo: F(r, '事案備考'), waterTemp: F(r, '水温(℃)'), visibility: F(r, '透視度(m)'), sea: F(r, '海況'),
+        strict: false, status: 'closed', closedAt: en ? isoFromYmdHm(en, en.split(' ')[1]) : null, tableId: BUILTIN_ID, tableSnap: BUILTIN_TABLE, divers: [] };
+      S.incidents.push(inc); newInc++;
+    }
+    let dv = inc.divers.find(d => d.memberId === mid);
+    if (!dv) { dv = { memberId: mid, tank: num(F(r, 'タンク容量(L)')) ?? S.settings.tank, sac: S.settings.sac, current: null, nextFirst: false, dives: [] }; inc.divers.push(dv); }
+    let endAt = isoFromYmdHm(F(r, '日付'), F(r, '浮上時刻')) || startAt;
+    if (endAt < startAt) endAt = new Date(new Date(endAt).getTime() + 86400000).toISOString();
+    let ascentAt = F(r, '浮上開始時刻') ? isoFromYmdHm(F(r, '日付'), F(r, '浮上開始時刻')) : null;
+    if (ascentAt && ascentAt < startAt) ascentAt = new Date(new Date(ascentAt).getTime() + 86400000).toISOString();
+    const stop = num(F(r, '浮上停止の時間(分)'));
+    dv.dives.push({ id, imported: true, startAt, ascentAt, endAt, updatedAt: nowISO(), plannedDepth: num(F(r, '予定水深(m)')), tank: num(F(r, 'タンク容量(L)')), startP: num(F(r, '開始圧(気圧)')), endP: num(F(r, '終了圧(気圧)')),
+      maxDepth: num(F(r, '最大水深(m)')), adt: num(F(r, '潜水時間(分)')), safetyStop: F(r, '安全停止') !== '無', stopMin: stop ?? (F(r, '安全停止') === '無' ? 0 : null),
+      decoStopDone: (F(r, '減圧停止(表の判定)') || F(r, '減圧停止')) === '有' ? stop : null, condition: F(r, '体調異常') || '無', note: F(r, '備考'), treatAsFirst: F(r, '1本目扱い') !== '' });
+    dv.dives.sort((a, b) => String(a.startAt).localeCompare(String(b.startAt)));
+    known.add(id); added++;
+  });
+  return { added, skipped, bad, newMembers, newInc };
+}
 
 /* ===== 潜水表 ===== */
 let pending = null; // 読み込んだ表（切り替え前）
@@ -1271,7 +1586,7 @@ function viewSettings() {
   return `${bar('設定', '', true)}
   <main class="wrap">
     <section class="stack"><h2>隊員（${S.members.length}人）</h2>
-      ${S.members.length ? `<div class="list">${S.members.map(m => `<div class="row" style="padding-block:.6rem"><div class="item-main"><div class="item-title">${esc(m.name)}</div><div class="small num">職員番号 ${esc(m.id)}</div></div><button class="btn btn-icon" data-act="del-member" data-id="${esc(m.id)}" aria-label="${esc(m.name)}を削除">${ic('trash-2')}</button></div>`).join('')}</div>` : '<p class="small">まだ登録がありません。</p>'}
+      ${S.members.length ? `<div class="list">${S.members.map(m => `<button class="item" data-act="sheet" data-sheet="member" data-id="${esc(m.id)}"><div class="item-main"><div class="item-title">${esc(m.name)}${isActive(m) ? '' : ` <span class="state">${esc(m.status)}</span>`}</div><div class="small num">職員番号 ${esc(m.id)}${m.unit ? `・${esc(m.unit)}` : ''}・資格・研修 ${(m.quals || []).length}件${!hasQual(m, '潜水士免許') ? '・<b>潜水士免許 ×</b>' : ''}</div></div>${ic('chevron-right')}</button>`).join('')}</div>` : '<p class="small">まだ登録がありません。</p>'}
       <div class="grid2">
         <label class="field"><span>職員番号</span><input class="input num" id="m-id" inputmode="numeric"></label>
         <label class="field"><span>氏名</span><input class="input" id="m-name"></label>
@@ -1293,6 +1608,10 @@ function viewSettings() {
     </section>
     <section class="stack"><h2>表示</h2>
       <div class="chips">${[['auto', '端末に合わせる'], ['light', '明るい'], ['dark', '暗い']].map(([v, l]) => `<button class="chip" data-act="theme" data-v="${v}" aria-pressed="${st.theme === v}">${ic('check')}${l}</button>`).join('')}</div>
+    </section>
+    <section class="stack"><h2>過去の記録を取り込む</h2>
+      <p class="small">アプリを使う前の潜水記録を、経歴簿に入れます。台帳の「CSV抽出」シートで［CSVで保存］したファイル、またはアプリのCSVを選んでください。同じ記録は二重に入りません。</p>
+      <label class="btn btn-block">${ic('upload')}CSVを選んで取り込む<input type="file" id="past-file" accept=".csv,text/csv" hidden></label>
     </section>
     <section class="stack"><h2>データの控え</h2>
       <p class="small">記録はこのスマホの中だけにあります。端末の故障や機種変更に備えて、月に1回はすべての記録をファイルに控え、署のパソコンなど端末の外に保管してください。<br>
@@ -1386,6 +1705,11 @@ document.addEventListener('click', async e => {
 
   switch (act) {
     case 'reload': location.reload(); break;
+    case 'rec-period': readRecDates(); rec.period.kind = el.dataset.v; render(); break;
+    case 'rec-member': { const v = el.dataset.v; rec.ids = rec.ids.includes(v) ? rec.ids.filter(x => x !== v) : [...rec.ids, v]; render(); break; }
+    case 'rec-all': rec.ids = S.members.filter(m => rec.showAll || isActive(m)).map(m => m.id); render(); break;
+    case 'rec-none': rec.ids = []; render(); break;
+    case 'rec-xlsx': readRecDates(); el.disabled = true; try { await exportRecords(); } finally { el.disabled = false; } break;
     case 'back': history.length > 1 ? history.back() : go('home'); break;
     case 'go': if (view.name === 'new') readDraft(); if (el.dataset.to === 'new') draft = null; go(el.dataset.to); break;
     case 'open-inc': { const x = S.incidents.find(i => i.id === el.dataset.id); go(x.status === 'active' ? 'board' : 'summary', { incidentId: x.id }); break; }
@@ -1393,7 +1717,7 @@ document.addEventListener('click', async e => {
     case 'undo': if (undoSnap) { S = JSON.parse(undoSnap); undoSnap = null; saved(); $('#toast').hidden = true; sheet = null; render(); toast('元に戻しました'); } break;
     case 'sheet-close': closeSheet(); break;
     case 'sheet-close-back': if (e.target === el) closeSheet(); break;
-    case 'sheet': openSheet(el.dataset.sheet, { i: I, k: el.dataset.k != null ? Number(el.dataset.k) : null }); break;
+    case 'sheet': openSheet(el.dataset.sheet, { i: I, k: el.dataset.k != null ? Number(el.dataset.k) : null, id: el.dataset.id ?? null }); break;
     case 'clear-sample': {
       snapshot();
       const ids = S.members.filter(m => m.sample).map(m => m.id);
@@ -1557,18 +1881,34 @@ document.addEventListener('click', async e => {
       const id = toHalf($('#m-id').value), name = $('#m-name').value.trim();
       if (!id || !name) { toast('職員番号と氏名を入れてください'); break; }
       if (S.members.some(m => m.id === id)) { toast('同じ職員番号がすでにあります'); break; }
-      S.members.push({ id, name }); saved(); render(); toast(`${name}を登録しました`); break;
+      S.members.push({ id, name, status: '在籍', quals: [] }); saved(); render(); toast(`${name}を登録しました`); break;
     }
     case 'bulk-member': {
       const lines = $('#m-bulk').value.split(/\r?\n/).map(l => l.split(/[,\t]/).map(s => s.trim())).filter(p => p[0] && p[1]);
       let add = 0; const skip = [];
-      lines.forEach(([id, name]) => { id = toHalf(id); if (!/^[0-9A-Za-z_-]+$/.test(id)) skip.push(`${id}（番号の形）`); else if (S.members.some(m => m.id === id)) skip.push(`${id}（登録済み）`); else { S.members.push({ id, name }); add++; } });
+      lines.forEach(([id, name]) => { id = toHalf(id); if (!/^[0-9A-Za-z_-]+$/.test(id)) skip.push(`${id}（番号の形）`); else if (S.members.some(m => m.id === id)) skip.push(`${id}（登録済み）`); else { S.members.push({ id, name, status: '在籍', quals: [] }); add++; } });
       saved(); render(); toast(`${add}人を登録しました${skip.length ? `。登録しなかった行：${skip.slice(0, 5).join('、')}${skip.length > 5 ? ` ほか${skip.length - 5}行` : ''}` : ''}`); break;
     }
+    case 'p-status': sheet.status = el.dataset.v; { const keep = [$('#p-name').value, $('#p-unit').value]; renderSheet(); $('#p-name').value = keep[0]; $('#p-unit').value = keep[1]; } break;
+    case 'q-kind': { const keep = ['#q-name', '#q-date', '#q-exp', '#q-no', '#q-note'].map(id => $(id).value); sheet.kind = el.dataset.v; renderSheet(); ['#q-name', '#q-date', '#q-exp', '#q-no', '#q-note'].forEach((id, k) => { $(id).value = keep[k]; }); break; }
+    case 'save-member': {
+      const m = S.members.find(x => x.id === sheet.id), name = $('#p-name').value.trim();
+      if (!name) { toast('氏名を入れてください'); break; }
+      snapshot(); m.name = name; m.unit = $('#p-unit').value.trim(); m.status = sheet.status ?? m.status ?? '在籍';
+      saved(); renderSheet(); render(); toast('保存しました', true); break;
+    }
+    case 'add-qual': {
+      const m = S.members.find(x => x.id === sheet.id);
+      const q = { id: uid(), kind: sheet.kind || '資格', name: $('#q-name').value.trim(), date: $('#q-date').value, expires: $('#q-exp').value, no: $('#q-no').value.trim(), note: $('#q-note').value.trim(), addedAt: nowISO() };
+      if (!q.name || !q.date) { toast('名称と取得・修了日を入れてください'); break; }
+      if (q.expires && q.expires < q.date) { toast('有効期限が取得日より前です'); break; }
+      snapshot(); (m.quals ||= []).push(q); saved(); renderSheet(); render(); toast(`${q.name}を追加しました`, true); break;
+    }
+    case 'del-qual': { const m = S.members.find(x => x.id === sheet.id); snapshot(); m.quals = (m.quals || []).filter(q => q.id !== el.dataset.id); saved(); renderSheet(); render(); toast('削除しました', true); break; }
     case 'del-member': {
       const id = el.dataset.id;
-      if (S.incidents.some(i => i.status === 'active' && i.divers.some(d => d.memberId === id))) { toast('進行中の事案に入っているため削除できません'); break; }
-      snapshot(); S.members = S.members.filter(m => m.id !== id); saved(); render(); toast('隊員を削除しました', true); break;
+      if (S.incidents.some(i => i.commanderId === id || i.watchId === id || i.divers.some(d => d.memberId === id))) { toast('記録に使われているため削除できません。異動・退職にしてください'); break; }
+      snapshot(); S.members = S.members.filter(m => m.id !== id); saved(); sheet = null; render(); toast('隊員を削除しました', true); break;
     }
     case 'theme': S.settings.theme = el.dataset.v; saved(); render(); break;
     case 'backup': {
@@ -1578,14 +1918,19 @@ document.addEventListener('click', async e => {
       else if (r !== 'cancel') toast('この環境では保存できません');
       break;
     }
-    case 'wipe': if (confirmWipe === '削除') { localStorage.removeItem(LS_KEY); S = { ...sampleState(), members: [], incidents: [] }; confirmWipe = ''; saved(); go('home'); toast('すべての記録を消しました'); } break;
+    case 'wipe': if (confirmWipe === '削除') {
+      // 退避した古い記録・壊れた記録も含めて、この端末の記録を消す
+      try { Object.keys(localStorage).filter(k => k.startsWith(LS_KEY)).forEach(k => localStorage.removeItem(k)); } catch (er) {}
+      try { await IDB.tx('readwrite', st => { st.clear(); }); } catch (er) {}
+      S = { ...sampleState(), members: [], incidents: [] }; confirmWipe = ''; saved(); go('home'); toast('すべての記録を消しました'); } break;
   }
 });
 
+function readRecDates() { if ($('#rec-from')) { rec.period.from = $('#rec-from').value; rec.period.to = $('#rec-to').value; } }
 function touch(inc) { if (inc) inc.updatedAt = nowISO(); }
 function markSent(inc) { inc.sentAt = nowISO(); saved(); render(); }
 // 保存して、失敗したらその場で知らせる
-function saved() { if (!save()) setTimeout(() => toast('保存できませんでした。この記録は端末に残っていません'), 0); return storageOK; }
+function saved() { save(); return storageOK; }
 
 /* 入力値をシートの状態へ */
 function readDownInputs() { if (!sheet) return; sheet.startP = $('#d-startp')?.value.trim() ?? sheet.startP; sheet.tank = $('#d-tank')?.value.trim() ?? sheet.tank; }
@@ -1633,6 +1978,8 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.id === 'rec-showall') { rec.showAll = t.checked; render(); }
+  if (t.id === 'rec-from' || t.id === 'rec-to') { readRecDates(); render(); }
   if (t.id === 'table-file') readFile(t, text => {
     try {
       const data = JSON.parse(text.replace(/^\ufeff/, ''));
@@ -1640,6 +1987,13 @@ document.addEventListener('change', e => {
       pending = { data, check, changes: check.errors.length ? [] : Engine.diff(activeTable().data, data) };
     } catch (er) { pending = { error: 'ファイルの中身を読み取れませんでした。Excelから書き出した潜水表ファイル（.json）を選んでください。' }; }
     render();
+  });
+  if (t.id === 'past-file') readFile(t, text => {
+    snapshot();
+    const r = importPastCSV(text);
+    if (r.error) { toast(r.error); return; }
+    saved(); render();
+    toast(!r.added && r.skipped && !r.bad ? `すべて取り込み済みです（${r.skipped}本）` : `${r.added}本を取り込みました（事案 ${r.newInc}件・隊員 ${r.newMembers}人を追加${r.skipped ? `・取り込み済み ${r.skipped}本` : ''}${r.bad ? `・読めない行 ${r.bad}行` : ''}）`, true);
   });
   if (t.id === 'restore-file') readFile(t, text => {
     try { const s = JSON.parse(text.replace(/^\ufeff/, '')); if (!validBackup(s)) throw 0; snapshot(); S = s; S.settings = { lastBackup: null, ...S.settings }; saved(); go('home'); toast('控えから戻しました', true); }
@@ -1657,8 +2011,13 @@ function validBackup(s) {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet) closeSheet(); });
 
 /* ---------- 起動 ---------- */
-save();
-render();
+(async () => {
+  S = await load();
+  S.settings = { lastBackup: null, ...S.settings };
+  S.members.forEach(m => { m.quals ||= []; });
+  ready = true;
+  save(); render();
+})();
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|anthropic/.test(location.hostname)) {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js').then(reg => reg.update?.()).catch(() => {});

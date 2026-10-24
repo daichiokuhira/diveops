@@ -12,7 +12,8 @@
 | 場所 | 中身 |
 |---|---|
 | app/src/engine.js | 計算エンジン。潜水表の数値には依存せず、表をデータとして受け取る |
-| app/src/app.js, app.css | 画面と保存（localStorage） |
+| app/src/app.js, app.css | 画面と保存（IndexedDB。v0.3.0 までの localStorage から自動で移す）。記録・経歴簿と Excel 出力もここ |
+| app/vendor/exceljs.min.js | Excel 出力の部品（ExcelJS 4.4.0、MIT）。出力するときだけ読み込む。Service Worker でオフライン用に保存 |
 | app/tables/naui-2022.json | 内蔵の潜水表（NAUI 2022年版。2026-10-24 隊内2名で照合済み） |
 | app/build.py | 1枚の index.html にまとめて docs/ へ出力 |
 | ledger/build_ledger.py | 台帳（.xlsx）を作る |
@@ -41,6 +42,10 @@
 - 台帳「潜水表」シートの配置（build_ledger.py の grid）と、マクロの書き出し・export_port.py は対になっている。
 - 取り込みの照合は「記録ID」（潜水1本ごとの一意な値）。記録IDのない旧CSVは「事案ID＋職員番号＋本数」。削除した潜水は消さずに「状態=削除」で送り、本数は振り直さない。
 - 取り込みの列の対応・行数の上限は ledger/build/grids.json に一元化している（build_ledger.py が書き、make_bas.py・import_port.py が読む）。
+
+### Excel 出力（アプリ）
+- 「経歴簿」シートの並びは、台帳（build_ledger.py）の経歴簿と同じにする。「潜水記録」シートは CSV_HEAD と同じ列（csvValues を共通で使う）。
+- アプリに入っている記録は、その端末の分だけ。正本は署に置く、という位置づけを画面と説明から消さない。
 
 ### Excel 2019 の制約
 - FILTER・XLOOKUP・UNIQUE・SORT は使わない（2019にない）。INDEX/MATCH と補助列で作る。

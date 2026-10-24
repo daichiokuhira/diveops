@@ -18,10 +18,16 @@ def ex(label, got, want):
     print('OK ' if p else 'NG ', label, '' if p else f'got={got!r} want={want!r}')
 
 # 保存データの時刻をずらす（潜水中・休息中の表示を確かめるため）
-SHIFT = """([path, mins]) => { const s = JSON.parse(localStorage.getItem('diveops.v1')); const inc = s.incidents.find(i => i.status === 'active');
+# 記録は IndexedDB（diveops / kv / state）にある。テストから読み書きする小道具
+IDB = """const idb = (mode, fn) => new Promise((res, rej) => { const o = indexedDB.open('diveops', 1); o.onsuccess = () => { const db = o.result; const t = db.transaction('kv', mode); const out = fn(t.objectStore('kv')); t.oncomplete = () => { db.close(); res(out && out.result); }; t.onerror = () => rej(t.error); }; o.onerror = () => rej(o.error); });
+const getS = async () => JSON.parse(await idb('readonly', st => st.get('state')));
+const putRaw = v => idb('readwrite', st => { st.put(v, 'state'); });
+const keys = () => idb('readonly', st => st.getAllKeys());"""
+def js(body): return "(async (arg) => { " + IDB + "\n" + body + " })"
+SHIFT = js("""const [path, mins] = arg; const s = await getS(); const inc = s.incidents.find(i => i.status === 'active');
   const set = (o, k) => { o[k] = new Date(new Date(o[k]).getTime() - mins * 60000).toISOString(); };
   const dv = inc.divers[0]; if (path === 'current') { set(dv.current, 'startAt'); } else { const d = dv.dives[0]; set(d, 'startAt'); set(d, 'endAt'); if (d.ascentAt) set(d, 'ascentAt'); }
-  localStorage.setItem('diveops.v1', JSON.stringify(s)); }"""
+  await putRaw(JSON.stringify(s));""")
 
 async def overflow(pg):
     return await pg.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1")
@@ -60,7 +66,7 @@ async def main():
         ex('お知らせが下に出る', await pg.evaluate("document.querySelector('#toast').getBoundingClientRect().top > innerHeight / 2"), True)
 
         # 上限を超えた表示（55分前に潜った扱い）
-        await pg.evaluate(SHIFT, ['current', 55])
+        await pg.wait_for_timeout(300); await pg.evaluate(SHIFT, ['current', 55]); await pg.wait_for_timeout(100)
         await pg.reload(); await pg.click('.item >> nth=0'); await pg.wait_for_timeout(1200)
         await pg.screenshot(path=SH + '04_board_over.png')
         ex('上限超過を反転表示', await pg.locator('.remain.over').count(), 1)
@@ -76,7 +82,7 @@ async def main():
         ex('最大水深は空欄で始まる', await pg.input_value('#u-depth'), '')
         ex('潜水時間は浮上開始まで（55分、切り上げ）', await pg.input_value('#u-adt') in ('55', '56'), True)
         await pg.click('[data-act="do-up"]')
-        ex('水深なしでは記録できない', 'S02' in await pg.evaluate("localStorage.getItem('diveops.v1')") and await pg.locator('#u-depth').count() == 1, True)
+        ex('水深なしでは記録できない', 'S02' in await pg.evaluate(js("return JSON.stringify(await getS());"), None) and await pg.locator('#u-depth').count() == 1, True)
         await pg.click('[data-act="up-depth"][data-v="17"]')
         await pg.fill('#u-endp', '７０')  # 全角
         await pg.screenshot(path=SH + '05_up_sheet.png')
@@ -94,7 +100,7 @@ async def main():
         ex('浮上を記録した', await pg.locator('#u-depth').count(), 0)
 
         # 休息65分後
-        await pg.evaluate(SHIFT, ['dive', 65])
+        await pg.wait_for_timeout(300); await pg.evaluate(SHIFT, ['dive', 65]); await pg.wait_for_timeout(100)
         await pg.reload(); await pg.click('.item >> nth=0'); await pg.wait_for_timeout(1200)
         await pg.screenshot(path=SH + '06_board_rest.png')
         ex('休息中は次の上限を大きく出す', await pg.locator('.diver-info .next').count(), 1)
@@ -112,13 +118,15 @@ async def main():
         ex('修正1回が残る', await pg.locator('text=修正1回').count(), 1)
         # 潜降を浮上より後にする修正は通さない
         await pg.click('[data-sheet="edit"][data-k="0"]')
-        before = await pg.evaluate("JSON.parse(localStorage.getItem('diveops.v1')).incidents.find(i=>i.status==='active').divers[0].dives[0].startAt")
+        await pg.wait_for_timeout(200)
+        before = await pg.evaluate(js("return (await getS()).incidents.find(i=>i.status==='active').divers[0].dives[0].startAt;"), None)
         end_hm = await pg.input_value('#e-end')
         h, m = map(int, end_hm.split(':')); m += 20; h = (h + m // 60) % 24; m %= 60
         await pg.fill('#e-start', f'{h:02d}:{m:02d}')
         await pg.fill('#e-why', '試験')
         await pg.click('[data-act="save-edit"]')
-        after = await pg.evaluate("JSON.parse(localStorage.getItem('diveops.v1')).incidents.find(i=>i.status==='active').divers[0].dives[0].startAt")
+        await pg.wait_for_timeout(200)
+        after = await pg.evaluate(js("return (await getS()).incidents.find(i=>i.status==='active').divers[0].dives[0].startAt;"), None)
         ex('潜降を浮上の後にする修正は保存しない', after, before)
         await pg.click('[data-act="sheet-close"]')
         await pg.click('[data-act="sheet"][data-sheet="diver"][data-i="0"]')
@@ -192,7 +200,7 @@ async def main():
         ex('記録更新日時は秒まで', len(r0['記録更新日時']), 19)
         ex('事案終了あり', r0['事案終了'] != '', True)
 
-        await pg.goto(URL); await pg.wait_for_timeout(500)
+        await pg.wait_for_timeout(300); await pg.goto(URL); await pg.wait_for_timeout(500)
         ex('送ったので未送信の印は出ない', await pg.locator('text=未送信').count(), 0)
         await pg.click('[data-act="go"][data-to="tables"]')
         await pg.screenshot(path=SH + '09_tables.png', full_page=True)
@@ -202,18 +210,70 @@ async def main():
         ex('計算 はみ出しなし', await overflow(pg), False)
         await pg.click('[data-act="back"]')
 
+        # ===== v0.4.0：資格・研修、記録・経歴簿、Excel出力、過去の記録の取り込み =====
+        await pg.click('[data-act="go"][data-to="settings"]')
+        await pg.click('[data-sheet="member"][data-id="S03"]')
+        await pg.click('[data-act="q-kind"][data-v="研修"]')
+        await pg.fill('#q-name', '水難救助研修'); await pg.fill('#q-date', '2024-10-01'); await pg.fill('#q-no', '第25期')
+        await pg.click('[data-act="add-qual"]')
+        ex('研修を追加できる', await pg.locator('.sheet >> text=水難救助研修').count() >= 1, True)
+        await pg.click('[data-act="q-kind"][data-v="資格"]')
+        await pg.fill('#q-name', '小型船舶2級'); await pg.fill('#q-date', '2026-01-10'); await pg.fill('#q-exp', '2025-01-01')
+        await pg.click('[data-act="add-qual"]')
+        ex('期限が取得日より前なら追加しない', await pg.locator('.sheet >> text=小型船舶2級').count(), 0)
+        await pg.click('[data-act="sheet-close"]')
+        # 過去の記録（台帳の「CSV抽出」の形。記録IDなしの旧形式も）
+        past = ('\ufeff日付,職員番号,氏名,区分,事案・訓練名,地点,最大水深(m),潜水時間(分),事案ID,本数,潜降時刻,浮上時刻,減圧停止,体調異常,指揮者\r\n'
+                '2025/05/14,0123,過去 太郎,訓練,定期潜水訓練,平良港,9,33,S-20250514,1,9:20,9:59,無,無,見本 一郎\r\n'
+                '2025/05/14,S03,見本 三郎,訓練,定期潜水訓練,平良港,8,31,S-20250514,1,9:22,9:59,無,無,見本 一郎\r\n')
+        await pg.set_input_files('#past-file', files=[{'name': 'past.csv', 'mimeType': 'text/csv', 'buffer': past.encode('utf-8')}])
+        await pg.wait_for_timeout(300)
+        ex('過去の記録を取り込む', await pg.locator('#toast >> text=2本を取り込みました').count(), 1)
+        ex('職員番号0123の隊員ができる', await pg.locator('text=職員番号 0123').count() >= 1, True)
+        await pg.set_input_files('#past-file', files=[{'name': 'past.csv', 'mimeType': 'text/csv', 'buffer': past.encode('utf-8')}])
+        await pg.wait_for_timeout(300)
+        ex('同じCSVは二重に入らない', await pg.locator('#toast >> text=すべて取り込み済みです（2本）').count(), 1)
+        await pg.click('[data-act="back"]')
+        # 記録・経歴簿
+        await pg.click('[data-act="go"][data-to="records"]')
+        await pg.click('[data-act="rec-period"][data-v="all"]')
+        await pg.click('[data-act="rec-none"]')
+        await pg.click('[data-act="rec-member"][data-v="S03"]')
+        await pg.click('[data-act="rec-member"][data-v="0123"]')
+        await pg.screenshot(path=SH + '13_records.png', full_page=True)
+        ex('記録・経歴簿 はみ出しなし', await overflow(pg), False)
+        ex('三郎は過去・見本・今回の3本', await pg.locator('text=3本（').count() >= 1, True)
+        async with pg.expect_download() as dl2:
+            await pg.click('[data-act="rec-xlsx"]')
+        xp = await (await dl2.value).path()
+        import shutil; shutil.copy(xp, SH + 'records.xlsx')
+        from openpyxl import load_workbook
+        wbx = load_workbook(SH + 'records.xlsx')
+        ex('Excelのシート', wbx.sheetnames, ['隊員一覧', '経歴簿_見本 三郎', '経歴簿_過去 太郎', '潜水記録', '資格・研修'])
+        k3 = wbx['経歴簿_見本 三郎']
+        ex('経歴簿の見出しは台帳と同じ並び', [k3.cell(9, c).value for c in (1, 2, 4, 6, 7)], ['No', '日付', '事案・訓練名', '最大水深(m)', '潜水時間(分)'])
+        ex('経歴簿に3本・古い順', [k3.cell(10, 2).value, k3.cell(10, 6).value, k3.cell(11, 6).value, k3.cell(12, 6).value, k3.cell(13, 1).value], ['2025/05/14', 8, 15, 11.5, None])
+        ex('経歴簿の本数', k3['C6'].value, 3)
+        ex('職員番号は文字のまま', wbx['経歴簿_過去 太郎']['C4'].value, '0123')
+        ex('潜水記録は48列', wbx['潜水記録'].max_column, 48)
+        ex('潜水記録の数式に見える事案名は文字', wbx['潜水記録'].cell(3, 5).data_type, 's')
+        ex('資格・研修', [r[3] for r in wbx['資格・研修'].iter_rows(min_row=2, values_only=True)], ['潜水士免許', '水難救助研修'])
+        ex('隊員一覧の免許なし', [wbx['隊員一覧'].cell(r, 5).value for r in (5, 6)], ['○', '×'])
+        await pg.click('[data-act="back"]')
+
         # 見本を消す：見本の隊員が入った事案も消える
         await pg.click('[data-act="sheet"][data-sheet="clearSample"]')
         await pg.screenshot(path=SH + '11_clear_sample.png')
         ex('見本の隊員が入った事案を警告', await pg.locator('.sheet .alert').count(), 1)
         await pg.click('[data-act="clear-sample"]')
-        n = await pg.evaluate("(() => { const s = JSON.parse(localStorage.getItem('diveops.v1')); return [s.members.length, s.incidents.length]; })()")
-        ex('見本を消すと隊員も事案も0', n, [0, 0])
+        await pg.wait_for_timeout(200)
+        n = await pg.evaluate(js("const s = await getS(); return [s.members.length, s.incidents.length];"), None)
+        ex('見本を消すと見本の隊員と見本が入った事案が消える（取り込んだ実在の隊員は残る）', n, [1, 0])
 
         # 保存データが壊れていても消さない
-        await pg.evaluate("localStorage.setItem('diveops.v1', '{壊れた')")
+        await pg.evaluate(js("await putRaw('{壊れた');"), None)
         await pg.reload(); await pg.wait_for_timeout(300)
-        kept = await pg.evaluate("Object.keys(localStorage).some(k => k.startsWith('diveops.v1.broken.'))")
+        kept = await pg.evaluate(js("return (await keys()).some(k => String(k).startsWith('broken.'));"), None)
         ex('壊れた記録は退避する', kept, True)
         ex('読み込めなかったことを知らせる', await pg.locator('.wrap-alert .alert').count() >= 1, True)
         await ctx.close()
@@ -222,7 +282,13 @@ async def main():
         ctx2 = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, color_scheme='dark', locale='ja-JP', timezone_id='Asia/Tokyo')
         pg2 = await ctx2.new_page()
         pg2.on('pageerror', lambda e: errs.append(str(e)))
+        # v0.3.0 までの記録（localStorage）は、IndexedDB へ引き継がれる
+        await pg2.add_init_script("if (!localStorage.getItem('diveops.v1.seeded')) { localStorage.setItem('diveops.v1.seeded', '1'); localStorage.setItem('diveops.v1', JSON.stringify({ v: 1, members: [{ id: '2001', name: '旧版 花子' }], settings: { tank: 10, sac: 20, reserve: 50, startP: 200, theme: 'auto' }, tables: { activeId: 'x', list: [] }, incidents: [] })); }")
         await pg2.goto(URL)
+        await pg2.wait_for_timeout(500)
+        ex('旧版の記録を引き継ぐ', await pg2.locator('text=これまでの事案').count(), 1)
+        mig = await pg2.evaluate(js("return [(await getS()).members.map(m => m.name), localStorage.getItem('diveops.v1') === null, !!localStorage.getItem('diveops.v1.before-idb')];"), None)
+        ex('IndexedDB に移り、元は退避', mig, [['旧版 花子'], True, True])
         await pg2.screenshot(path=SH + '12_home_dark.png')
         ex('暗い表示 はみ出しなし', await overflow(pg2), False)
         await b.close()

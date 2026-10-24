@@ -1,6 +1,6 @@
 {
   "name": "diveops",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "宮古島市消防本部 潜水隊の現場記録アプリと潜水管理台帳",
   "scripts": {
