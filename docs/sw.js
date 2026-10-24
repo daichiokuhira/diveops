@@ -1,5 +1,5 @@
 /* オフラインで動かすための保存（アプリ本体のみ。記録データは端末内の保存領域にあり、ここでは扱わない） */
-const CACHE = 'diveops-shell-0.4.0';
+const CACHE = 'diveops-shell-0.5.0';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './exceljs.min.js'];
 // 新しい版を入れるときは、ブラウザのキャッシュを通さずに取り直す
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())); });

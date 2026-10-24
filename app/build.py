@@ -1,10 +1,15 @@
 import json, datetime, pathlib, shutil
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-src = ROOT/'app'/'src'; tables = ROOT/'app'/'tables'; dist = ROOT/'docs'
+import os
+src = ROOT/'app'/'src'; tables = ROOT/'app'/'tables'; dist = pathlib.Path(os.environ.get('DIVEOPS_DIST') or ROOT/'docs')  # 試験用に出力先を変えられる
 dist.mkdir(exist_ok=True)
 VERSION = json.loads((ROOT/'package.json').read_text())['version']
 css = (src/'app.css').read_text()
-js = (src/'icons.js').read_text() + '\n' + (src/'engine.js').read_text() + '\n' + (src/'app.js').read_text().replace('__APP_VERSION__', VERSION)
+# 共有 API の場所（app/config.json。無ければ共有しない）。環境変数 DIVEOPS_API_BASE で上書きできる（試験用）
+import os
+cfg = ROOT/'app'/'config.json'
+API_BASE = os.environ.get('DIVEOPS_API_BASE', json.loads(cfg.read_text()).get('apiBase', '') if cfg.exists() else '')
+js = (src/'icons.js').read_text() + '\n' + (src/'engine.js').read_text() + '\n' + (src/'app.js').read_text().replace('__APP_VERSION__', VERSION).replace("'__API_BASE__'.startsWith('__') ? '' : '__API_BASE__'", json.dumps(API_BASE))
 table = json.dumps(json.loads((tables/'naui-2022.json').read_text()), ensure_ascii=False)
 build = VERSION
 body = f'''<div id="app"></div>

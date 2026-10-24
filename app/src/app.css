@@ -168,3 +168,5 @@ table.t tr.on td:first-child { background: linear-gradient(transparent 62%, var(
 .dock-in.dock-col .grid2 .btn { min-height: 3.5rem; }
 .qual-row { padding-block: 0.75rem; gap: 0.5rem; }
 .qual-row .link { min-height: var(--tap); text-align: left; }
+.sync-badge { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
+.bar-in [data-sync-badge] { flex: none; }

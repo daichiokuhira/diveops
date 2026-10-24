@@ -5,6 +5,8 @@ const BUILTIN_TABLE = JSON.parse(document.getElementById('builtin-table').textCo
 const BUILTIN_ID = 'builtin:' + BUILTIN_TABLE.version;
 const LS_KEY = 'diveops.v1';
 const APP_VERSION = '__APP_VERSION__';
+// 共有 API の場所（app/config.json の apiBase。空なら共有しない＝この端末だけで使う）
+const API_BASE = '__API_BASE__'.startsWith('__') ? '' : '__API_BASE__';
 const TZ = 'Asia/Tokyo';
 const TYPES = ['災害', '訓練', '研修', 'その他'];
 
@@ -125,7 +127,7 @@ async function load() {
       raw = ls; migratedRaw = ls;
     }
   } else if (useLS) raw = ls;
-  if (raw == null) return sampleState();
+  if (raw == null) return CLOUD ? { ...sampleState(), members: [], incidents: [] } : sampleState();
   try { const s = JSON.parse(raw); if (okState(s)) return s; } catch (e) {}
   // 壊れた記録は消さずに別の場所へ退避してから始める
   try { if (useLS) localStorage.setItem(LS_KEY + '.broken.' + Date.now(), raw); else await IDB.put('broken.' + Date.now(), raw); } catch (e) {}
@@ -137,6 +139,7 @@ let S = { ...sampleState(), members: [], incidents: [] }; // 読み込むまで�
 let ready = false, storageOK = true, saveChain = Promise.resolve();
 // 保存は順番に行う（後の保存が先の保存を追い越さない）。失敗したらその場で知らせる
 function save() {
+  if (ready) { try { trackChanges(); } catch (e) {} }
   S.savedAt = new Date().toISOString();
   const json = JSON.stringify(S);
   saveChain = saveChain.then(async () => {
@@ -261,7 +264,7 @@ function toast(msg, undo = false) {
 function bar(title, sub, back, right = '') {
   return `<header class="bar"><div class="bar-in">
     ${back ? `<button class="btn btn-icon" data-act="back" aria-label="戻る">${ic('chevron-left')}</button>` : ''}
-    <div class="bar-title">${title}${sub ? `<span class="bar-sub">${sub}</span>` : ''}</div>${right}</div></header>${globalAlerts()}`;
+    <div class="bar-title">${title}${sub ? `<span class="bar-sub">${sub}</span>` : ''}</div>${CLOUD ? `<span data-sync-badge>${syncBadge()}</span>` : ''}${right}</div></header>${globalAlerts()}`;
 }
 let updateReady = false;
 function globalAlerts() {
@@ -276,10 +279,10 @@ function render() {
   if (!ready) return;
   applyTheme();
   const app = $('#app');
-  const v = {
+  const v = CLOUD && !signedIn() ? viewLogin : ({
     home: viewHome, new: viewNew, board: viewBoard, summary: viewSummary,
     tables: viewTables, settings: viewSettings, calc: viewCalc, records: viewRecords
-  }[view.name] || viewHome;
+  }[view.name] || viewHome);
   app.innerHTML = v();
   renderSheet();
   tick();
@@ -332,7 +335,7 @@ function incTitle(inc) { return inc.title || `${inc.type} ${inc.site || ''} ${md
 function incRow(inc) {
   const n = inc.divers.reduce((a, d) => a + liveDives(d).length, 0);
   const down = inc.divers.filter(d => d.current).length;
-  const unsent = !inc.sample && inc.status !== 'active' && n && (!inc.sentAt || inc.sentAt < (inc.updatedAt || ''));
+  const unsent = !CLOUD && !inc.sample && inc.status !== 'active' && n && (!inc.sentAt || inc.sentAt < (inc.updatedAt || ''));
   return `<button class="item" data-act="open-inc" data-id="${esc(inc.id)}">
     <div class="item-main">
       <div class="item-title">${esc(incTitle(inc))}${unsent ? ` <span class="state">${ic('send')}未送信</span>` : ''}${inc.imported ? ' <span class="state">取り込み</span>' : ''}</div>
@@ -340,6 +343,7 @@ function incRow(inc) {
     </div>${ic('chevron-right')}</button>`;
 }
 function backupHint() {
+  if (CLOUD) return '';
   const real = S.incidents.filter(i => !i.sample).length;
   if (!real) return '';
   const last = S.settings.lastBackup;
@@ -626,25 +630,29 @@ function sheetMember() {
   sheet.kind ??= '資格';
   const qs = [...(m.quals || [])].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   const names = QUAL_NAMES[sheet.kind] || [];
+  const lead = isLeader(), self = !CLOUD || me()?.id === m.id, canQual = lead || self;
   return `${sheetHead(esc(m.name))}
   <p class="num"><b>職員番号 ${esc(m.id)}${m.unit ? `・${esc(m.unit)}` : ''}</b>${m.statusAt ? `<span class="small">（${esc(m.status)} ${esc(m.statusAt)}〜）</span>` : ''}</p>
-  <div class="grid2">
+  ${lead ? `<div class="grid2">
     <label class="field"><span>氏名</span><input class="input" id="p-name" value="${esc(m.name)}"></label>
     <label class="field"><span>所属</span><input class="input" id="p-unit" value="${esc(m.unit || '')}" placeholder="例：伊良部分署"></label>
   </div>
   <div class="field"><span>在籍状態</span><div class="chips">${['在籍', '異動', '退職'].map(v => `<button class="chip" data-act="p-status" data-v="${v}" aria-pressed="${(sheet.status ?? m.status ?? '在籍') === v}">${ic('check')}${v}</button>`).join('')}</div>
-    <p class="small">異動・退職にすると、潜水員の候補から外れます。過去の記録は残ります。</p></div>
+    <p class="small">異動・退職にすると、潜水員の候補から外れ、ログインもできなくなります。過去の記録は残ります。</p></div>
   <button class="btn btn-block" data-act="save-member">${ic('check')}氏名・所属・在籍を保存</button>
+  ${CLOUD ? `<p class="small">役割：<b>${m.role === 'leader' ? '隊長' : '隊員'}</b>${isAdmin() ? `　<button class="link" data-act="p-role">${m.role === 'leader' ? '隊長から外す' : '隊長にする'}</button>` : ''}</p>` : ''}`
+    : `<p class="small">氏名・所属・在籍の変更は、隊長に頼んでください。</p>`}
   <section class="stack"><h2>資格・研修（${qs.length}件）</h2>
-    ${qs.some(q => !q.confirmedAt) ? '<label class="field"><span>確かめる担当者の氏名（先に入れてから「確かめた」）</span><input class="input" id="q-who" autocomplete="off"></label>' : ''}
+    ${qs.some(q => !q.confirmedAt) && lead && !CLOUD ? '<label class="field"><span>確かめる担当者の氏名（先に入れてから「確かめた」）</span><input class="input" id="q-who" autocomplete="off"></label>' : ''}
     ${qs.length ? `<div class="list">${qs.map(q => `<div class="row qual-row"><div class="item-main"><div class="item-title">${esc(qualLabel(q))}<span class="small">（${esc(q.kind)}）</span></div>
       <div class="small num">${esc((q.date || '日付なし').replaceAll('-', '/'))}${q.expires ? `・期限 ${esc(q.expires.replaceAll('-', '/'))}${qualState(q) === 'expired' ? '・<b>× 期限切れ</b>' : qualState(q) === 'soon' ? '・<b>期限まで90日以内</b>' : ''}` : ''}${q.no ? `・${esc(q.no)}` : ''}${q.note ? `・${esc(q.note)}` : ''}${q.confirmedAt ? `・確認 ${esc(q.confirmedBy || '')} ${ymd(q.confirmedAt)}` : ''}</div>
-      ${q.confirmedAt ? '' : `<button class="btn btn-under" data-act="confirm-qual" data-id="${esc(q.id)}">${ic('check')}証の写しで確かめた</button>`}</div>
-      <button class="btn btn-icon" data-act="del-qual" data-id="${esc(q.id)}" aria-label="${esc(q.name)}を削除">${ic('trash-2')}</button></div>`).join('')}</div>` : '<p class="small">まだありません。</p>'}
-    <p class="small">本人が入れた資格・研修は「未確認」です。担当者が免許証・修了証の写しで確かめてから、氏名を入れて「確かめた」を押します。</p>
+      ${q.confirmedAt || !lead ? '' : `<button class="btn btn-under" data-act="confirm-qual" data-id="${esc(q.id)}">${ic('check')}証の写しで確かめた</button>`}</div>
+      ${lead || (self && !q.confirmedAt) ? `<button class="btn btn-icon" data-act="del-qual" data-id="${esc(q.id)}" aria-label="${esc(q.name)}を削除">${ic('trash-2')}</button>` : ''}</div>`).join('')}</div>` : '<p class="small">まだありません。</p>'}
+    <p class="small">本人が入れた資格・研修は「未確認」です。${CLOUD ? '隊長が免許証・修了証の写しで確かめて「確かめた」を押すと、確認済みになります（確かめた隊長の名前が残ります）。' : '担当者が免許証・修了証の写しで確かめてから、氏名を入れて「確かめた」を押します。'}</p>
 
   </section>
-  <section class="stack"><h2>${esc(m.name)}さんの資格・研修を追加</h2>
+  ${canQual ? '' : '<p class="small">ほかの隊員の資格・研修は、本人か隊長が入れます。</p>'}
+  <section class="stack" ${canQual ? '' : 'hidden'}><h2>${esc(m.name)}さんの資格・研修を追加</h2>
     <div class="chips">${['資格', '研修'].map(v => `<button class="chip" data-act="q-kind" data-v="${v}" aria-pressed="${sheet.kind === v}">${ic('check')}${v}</button>`).join('')}</div>
     <div class="field"><span>名称<b>必須</b></span><div class="chips">${names.map(n => `<button class="chip" data-act="q-pick" data-v="${esc(n)}" aria-pressed="${sheet.qname === n}">${ic('check')}${esc(n)}</button>`).join('')}<button class="chip" data-act="q-pick" data-v="" aria-pressed="${sheet.qname === ''}">${ic('check')}その他</button></div>
       ${sheet.qname === '' ? '<input class="input" id="q-name" placeholder="名称を入れる">' : ''}</div>
@@ -735,7 +743,13 @@ function viewSummary() {
       ${missing.length ? `<div class="alert soft">${ic('info')}<span>${missing.join('・')}が未入力です。「事案の情報を直す」から入れられます。</span></div>` : ''}
       <button class="btn btn-primary btn-big btn-block" data-act="close-inc" ${downNow.length ? 'disabled' : ''}>${ic('flag')}事案を終了する（${hm(nowISO())}）</button>
     </section>` : ''}
-    ${inc.imported ? '' : `<section class="stack"><h2 id="send-head">${active ? '2. 署へ送る' : '次：署へ送る'}</h2>
+    ${inc.imported ? '' : CLOUD ? `<section class="stack"><h2 id="send-head">${active ? '2. 共有' : '共有'}</h2>
+      <p class="small">記録は自動で隊の全員と共有されます（<span data-sync-badge>${syncBadge()}</span>）。メールで送る必要はありません。台帳へは、署のパソコンで「記録・経歴簿」→「台帳用CSV」を取り込みます。</p>
+      <details><summary class="small"><b>予備：この事案のCSVを作る</b></summary><div class="grid2" style="margin-top:.5rem">
+        <button class="btn" data-act="save-csv" ${rows.length ? '' : 'disabled'}>${ic('download')}保存</button>
+        <button class="btn" data-act="copy-csv" ${rows.length ? '' : 'disabled'}>${ic('copy')}コピー</button></div>
+        <textarea class="input small" id="csv-fallback" hidden readonly></textarea></details>
+    </section>` : `<section class="stack"><h2 id="send-head">${active ? '2. 署へ送る' : '次：署へ送る'}</h2>
       ${active ? '<p class="small">事案を終了すると送れます（終了時刻もCSVに入ります）。</p>'
         : `<p class="small">CSVファイル（潜水管理台帳で取り込む形式）を作ります。「メールで送る」を押し、共有先でメールを選んでください。${inc.sentAt ? `<br><b>前回送った日時：${ymd(inc.sentAt)} ${hm(inc.sentAt)}</b>${inc.updatedAt > inc.sentAt ? '（そのあと記録を直しています。もう一度送ってください）' : ''}` : ''}</p>`}
       <button class="btn ${active ? '' : 'btn-primary'} btn-big btn-block" data-act="share-csv" ${rows.length && !active ? '' : 'disabled'}>${ic('mail')}メールで送る</button>
@@ -1203,7 +1217,7 @@ function viewSettings() {
   <main class="wrap">
     <section class="stack"><h2>隊員（${S.members.length}人）</h2>
       ${S.members.length ? `<div class="list">${S.members.map(m => `<button class="item" data-act="sheet" data-sheet="member" data-id="${esc(m.id)}"><div class="item-main"><div class="item-title">${esc(m.name)}${isActive(m) ? '' : ` <span class="state">${esc(m.status)}</span>`}</div><div class="small num">職員番号 ${esc(m.id)}${m.unit ? `・${esc(m.unit)}` : ''}・資格・研修 ${(m.quals || []).length}件・潜水士免許 ${licenseOf(m) === 'none' ? '<b>× 無</b>' : LICENSE_TEXT[licenseOf(m)]}</div></div>${ic('chevron-right')}</button>`).join('')}</div>` : '<p class="small">まだ登録がありません。</p>'}
-      <div class="grid2">
+      ${isLeader() ? `<div class="grid2">
         <label class="field"><span>職員番号</span><input class="input num" id="m-id" inputmode="numeric"></label>
         <label class="field"><span>氏名</span><input class="input" id="m-name"></label>
       </div>
@@ -1212,7 +1226,7 @@ function viewSettings() {
         <p class="small">1行に「職員番号,氏名」。Excelの2列をコピーして貼り付けても読み取れます。</p>
         <textarea class="input" id="m-bulk" placeholder="1001,宮古 太郎&#10;1002,伊良部 次郎"></textarea>
         <button class="btn" data-act="bulk-member">${ic('upload')}まとめて登録</button>
-      </details>
+      </details>` : `<p class="small">隊員の追加は隊長が行います。自分の名前を押すと、資格・研修を入れられます。</p>`}
     </section>
     <section class="stack"><h2>標準値</h2>
       <div class="grid2">
@@ -1225,13 +1239,19 @@ function viewSettings() {
     <section class="stack"><h2>表示</h2>
       <div class="chips">${[['auto', '端末に合わせる'], ['light', '明るい'], ['dark', '暗い']].map(([v, l]) => `<button class="chip" data-act="theme" data-v="${v}" aria-pressed="${st.theme === v}">${ic('check')}${l}</button>`).join('')}</div>
     </section>
-    <section class="stack"><h2>過去の記録を取り込む</h2>
+    ${CLOUD ? `<section class="stack"><h2>ログイン</h2>
+      <p class="small">${esc(me()?.name || '')}（職員番号 ${esc(me()?.id || '')}・${{ admin: '管理者', leader: '隊長', member: '隊員' }[me()?.role] || '隊員'}）　${syncBadge()}</p>
+      <div class="grid2"><button class="btn" data-act="sync-now">${ic('refresh-cw')}今すぐ共有</button><button class="btn" data-act="logout">${ic('log-out')}ログアウト</button></div>
+      ${logoutConfirm ? `<div class="alert">${ic('triangle-alert')}<span>まだ送れていない記録が ${pendingCount()}件あります。ログアウトすると消えます。電波のある所で「今すぐ共有」を押してからにしてください。それでもログアウトするなら、もう一度「ログアウト」を押してください。</span></div>` : ''}
+      <p class="small">ログアウトすると、この端末の記録を消します（共有の記録は残ります）。現場用スマホを別の人が使うときに押してください。</p>
+    </section>` : ''}
+    <section class="stack" ${isLeader() ? '' : 'hidden'}><h2>過去の記録を取り込む</h2>
       <p class="small">アプリを使う前の潜水記録を、経歴簿に入れます。台帳の「CSV抽出」シートで［CSVで保存］したファイル、またはアプリのCSVを選んでください。同じ記録は二重に入りません。</p>
       <label class="btn btn-block">${ic('upload')}CSVを選んで取り込む<input type="file" id="past-file" accept=".csv,text/csv" hidden></label>
       ${st.lastImport ? `<div class="alert soft">${ic('info')}<span>前回の取り込み（${ymd(st.lastImport.at)} ${hm(st.lastImport.at)}）：${st.lastImport.error ? esc(st.lastImport.error)
         : `${st.lastImport.added}本・事案 ${st.lastImport.newInc}件・隊員 ${st.lastImport.newMembers}人を追加${st.lastImport.skipped ? `、取り込み済み ${st.lastImport.skipped}本` : ''}${st.lastImport.appRows?.length ? `、このスマホで記録した事案の行 ${st.lastImport.appRows.length}行は取り込まず` : ''}${st.lastImport.bad ? `、<b>読めなかった行 ${st.lastImport.bad}行（${(st.lastImport.badRows || []).slice(0, 20).join('・')}行目${(st.lastImport.badRows || []).length > 20 ? ' ほか' : ''}）</b>` : ''}`}</span></div>` : ''}
     </section>
-    <section class="stack"><h2>データの控え</h2>
+    <section class="stack" ${CLOUD ? 'hidden' : ''}><h2>データの控え</h2>
       <p class="small">記録はこのスマホの中だけにあります。端末の故障や機種変更に備えて、月に1回はすべての記録をファイルに控え、署のパソコンなど端末の外に保管してください。<br>
       最後に控えを作った日：<b>${st.lastBackup ? `${ymd(st.lastBackup)} ${hm(st.lastBackup)}` : 'まだありません'}</b>${persisted === false ? '<br>この端末では、空き容量が少ないと記録が消される設定です。ホーム画面に追加して使ってください。' : ''}</p>
       <div class="grid2">
@@ -1239,7 +1259,7 @@ function viewSettings() {
         <label class="btn">${ic('upload')}控えから戻す<input type="file" id="restore-file" accept=".json,application/json" hidden></label>
       </div>
     </section>
-    <section class="stack"><h2>すべての記録を消す</h2>
+    <section class="stack" ${CLOUD ? 'hidden' : ''}><h2>すべての記録を消す</h2>
       <p class="small">この端末の記録を消します。元に戻せません。メールで送ったCSVと控えのファイルは消えません。</p>
       <label class="field"><span>確認のため「削除」と入力</span><input class="input" id="wipe" value="${esc(confirmWipe)}" autocomplete="off"></label>
       <button class="btn" data-act="wipe" ${confirmWipe === '削除' ? '' : 'disabled'}>${ic('trash-2')}すべて消す</button>
@@ -1323,6 +1343,10 @@ document.addEventListener('click', async e => {
 
   switch (act) {
     case 'reload': location.reload(); break;
+    case 'login': await doLogin(); break;
+    case 'logout': doLogout(); break;
+    case 'sync-now': syncNote = ''; await syncNow(); break;
+    case 'p-role': { const m = S.members.find(x => x.id === sheet.id); if (!m || !isAdmin()) break; snapshot(); m.role = m.role === 'leader' ? 'member' : 'leader'; saved(); renderSheet(); render(); toast(m.role === 'leader' ? `${m.name}を隊長にしました` : `${m.name}を隊長から外しました`, true); break; }
     case 'home-all': homeAll = !homeAll; render(); break;
     case 'rec-period': readRecDates(); rec.period.kind = el.dataset.v; render(); break;
     case 'rec-member': { const v = el.dataset.v; rec.ids = rec.ids.includes(v) ? rec.ids.filter(x => x !== v) : [...rec.ids, v]; render(); break; }
@@ -1499,12 +1523,14 @@ document.addEventListener('click', async e => {
 
     /* 設定 */
     case 'add-member': {
+      if (!isLeader()) break;
       const id = toHalf($('#m-id').value), name = $('#m-name').value.trim();
       if (!id || !name) { toast('職員番号と氏名を入れてください'); break; }
       if (S.members.some(m => m.id === id)) { toast('同じ職員番号がすでにあります'); break; }
       S.members.push({ id, name, status: '在籍', quals: [] }); saved(); render(); toast(`${name}を登録しました`); break;
     }
     case 'bulk-member': {
+      if (!isLeader()) break;
       const lines = $('#m-bulk').value.split(/\r?\n/).map(l => l.split(/[,\t]/).map(s => s.trim())).filter(p => p[0] && p[1]);
       let add = 0; const skip = [];
       lines.forEach(([id, name]) => { id = toHalf(id); if (!/^[0-9A-Za-z_-]+$/.test(id)) skip.push(`${id}（番号の形）`); else if (S.members.some(m => m.id === id)) skip.push(`${id}（登録済み）`); else { S.members.push({ id, name, status: '在籍', quals: [] }); add++; } });
@@ -1518,11 +1544,13 @@ document.addEventListener('click', async e => {
     }
     case 'confirm-qual': {
       const m = S.members.find(x => x.id === sheet.id), q = (m.quals || []).find(x => x.id === el.dataset.id);
-      const who = $('#q-who')?.value || '';
+      if (!isLeader()) break;
+      const who = CLOUD ? (me()?.name || '') : ($('#q-who')?.value || '');
       if (!who.trim()) { toast('確かめた担当者の氏名を入れてください'); $('#q-who')?.focus(); break; }
       snapshot(); q.confirmedAt = nowISO(); q.confirmedBy = who.trim(); saved(); renderSheet(); render(); toast(`${q.name}を確認済みにしました`, true); break;
     }
     case 'save-member': {
+      if (!isLeader()) break;
       const m = S.members.find(x => x.id === sheet.id), name = $('#p-name').value.trim();
       if (!name) { toast('氏名を入れてください'); break; }
       const ns = sheet.status ?? m.status ?? '在籍';
@@ -1532,6 +1560,7 @@ document.addEventListener('click', async e => {
     }
     case 'add-qual': {
       const m = S.members.find(x => x.id === sheet.id);
+      if (!isLeader() && me()?.id !== m.id) break;
       const q = { id: uid(), kind: sheet.kind || '資格', name: normQualName(sheet.qname || $('#q-name')?.value || ''), date: $('#q-date').value, expires: $('#q-exp').value, no: $('#q-no').value.trim(), note: $('#q-note').value.trim(), addedAt: nowISO() };
       if (!q.name || !q.date) { toast('名称と取得・修了日を入れてください'); break; }
       if (q.date > todayDash()) { toast('取得・修了日が未来の日付です'); break; }
@@ -1546,7 +1575,7 @@ document.addEventListener('click', async e => {
     }
     case 'theme': S.settings.theme = el.dataset.v; saved(); render(); break;
     case 'backup': {
-      const name = `潜水現場記録_控え_${ymdCompact(nowISO())}.json`, text = JSON.stringify(S);
+      const name = `潜水現場記録_控え_${ymdCompact(nowISO())}.json`, text = JSON.stringify(strip(S, 'sync'));
       const r = await shareText(name, text, 'application/json');
       if (r === 'shared' || (r === 'unsupported' && downloadText(name, text, 'application/json'))) { S.settings.lastBackup = nowISO(); saved(); render(); toast('控えを作りました。署のパソコンなど、この端末の外に保管してください'); }
       else if (r !== 'cancel') toast('この環境では保存できません');
@@ -1565,7 +1594,7 @@ function readRecDates() { if ($('#rec-from')) { rec.period.from = $('#rec-from')
 function touch(inc) { if (inc) inc.updatedAt = nowISO(); }
 function markSent(inc) { inc.sentAt = nowISO(); saved(); render(); }
 // 保存して、失敗したらその場で知らせる
-function saved() { save(); return storageOK; }
+function saved() { save(); syncSoon(); return storageOK; }
 
 /* 入力値をシートの状態へ */
 function readDownInputs() { if (!sheet) return; sheet.startP = $('#d-startp')?.value.trim() ?? sheet.startP; sheet.tank = $('#d-tank')?.value.trim() ?? sheet.tank; }
@@ -1625,7 +1654,7 @@ document.addEventListener('change', e => {
     } catch (er) { pending = { error: 'ファイルの中身を読み取れませんでした。Excelから書き出した潜水表ファイル（.json）を選んでください。' }; }
     render();
   });
-  if (t.id === 'past-file') readFile(t, text => {
+  if (t.id === 'past-file' && isLeader()) readFile(t, text => {
     snapshot();
     const r = importPastCSV(text);
     if (r.error) { S.settings.lastImport = { at: nowISO(), error: r.error }; saved(); render(); toast('取り込めませんでした'); return; }
@@ -1650,6 +1679,203 @@ function validBackup(s) {
 document.addEventListener('compositionend', e => { if (e.target.id === 'rec-q') e.target.dispatchEvent(new Event('input', { bubbles: true })); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet) closeSheet(); });
 
+/* ===== 共有（Cloudflare）=====
+   記録は端末に保存したまま、変わったところを「文書」に分けて送り、ほかの端末の変更を受け取る。
+   同じ文書は、変更した日時（updatedAt）の新しい方を正とする。電波がない間は端末に貯め、つながったら送る。
+   文書：member（隊員）・qual（資格・研修）・incident（事案）・diver（事案の潜水員）・dive（潜水1本） */
+const CLOUD = !!API_BASE;
+const KIND_ORDER = { member: 0, qual: 1, incident: 2, diver: 3, dive: 4 };
+const keyOf = (kind, id) => `${kind}:${id}`;
+const sy = () => (S.sync ||= { token: null, me: null, since: 0, known: {}, outbox: {}, lastAt: null, needFull: false });
+const signedIn = () => CLOUD && !!S.sync?.token;
+const me = () => S.sync?.me || null;
+// 隊長・管理者だけができること（共有しない使い方では、誰でもできる）
+const isLeader = () => !CLOUD || ['leader', 'admin'].includes(me()?.role);
+const isAdmin = () => !CLOUD || me()?.role === 'admin';
+const strip = (o, ...ks) => { const c = { ...o }; ks.forEach(k => delete c[k]); return c; };
+
+// いまの記録を文書の一覧にする（見本と、受け取り途中の仮の入れ物は送らない）
+function docsOf() {
+  const out = new Map();
+  S.members.forEach(m => {
+    if (m.sample) return;
+    if (!m._stub) out.set(keyOf('member', m.id), { kind: 'member', id: m.id, data: strip(m, 'id', 'quals', 'sample', '_stub') });
+    (m.quals || []).forEach(q => out.set(keyOf('qual', q.id), { kind: 'qual', id: q.id, data: { ...strip(q, 'id'), memberId: m.id } }));
+  });
+  S.incidents.forEach(inc => {
+    if (inc.sample) return;
+    if (!inc._stub) out.set(keyOf('incident', inc.id), { kind: 'incident', id: inc.id, data: strip(inc, 'id', 'divers', '_stub') });
+    inc.divers.forEach(dv => {
+      if (!dv._stub) out.set(keyOf('diver', `${inc.id}~${dv.memberId}`), { kind: 'diver', id: `${inc.id}~${dv.memberId}`, data: { ...strip(dv, 'dives', '_stub'), incidentId: inc.id } });
+      dv.dives.forEach(d => out.set(keyOf('dive', d.id), { kind: 'dive', id: d.id, data: { ...strip(d, 'id'), incidentId: inc.id, memberId: dv.memberId } }));
+    });
+  });
+  return out;
+}
+// 前回から変わった文書を、送る箱（outbox）に入れる
+function trackChanges() {
+  if (!signedIn()) return;
+  const s = sy(), now = new Date().toISOString(), cur = docsOf();
+  for (const [k, d] of cur) {
+    const h = JSON.stringify(d.data);
+    if (s.known[k] !== h) { s.outbox[k] = { ...d, deleted: false, updatedAt: now }; s.known[k] = h; }
+  }
+  for (const k of Object.keys(s.known)) if (!cur.has(k)) {
+    const [kind, ...rest] = k.split(':');
+    s.outbox[k] = { kind, id: rest.join(':'), data: {}, deleted: true, updatedAt: now };
+    delete s.known[k];
+  }
+}
+const pendingCount = () => Object.keys(S.sync?.outbox || {}).length;
+
+// 受け取った文書を、いまの記録に入れる
+function incStub(id) {
+  let inc = S.incidents.find(i => i.id === id);
+  if (!inc) { inc = { id, _stub: true, createdAt: new Date().toISOString(), type: 'その他', title: '', status: 'closed', divers: [], tableId: BUILTIN_ID }; S.incidents.push(inc); }
+  return inc;
+}
+function diverStub(inc, memberId) {
+  let dv = inc.divers.find(d => d.memberId === memberId);
+  if (!dv) { dv = { memberId, _stub: true, tank: S.settings.tank, sac: S.settings.sac, current: null, nextFirst: false, dives: [] }; inc.divers.push(dv); }
+  return dv;
+}
+function memberStub(id) {
+  let m = S.members.find(x => x.id === id);
+  if (!m) { m = { id, _stub: true, name: `職員番号 ${id}`, status: '在籍', quals: [] }; S.members.push(m); }
+  return m;
+}
+function removeFromAll(kind, id) {
+  if (kind === 'member') S.members = S.members.filter(m => m.id !== id);
+  if (kind === 'qual') S.members.forEach(m => { m.quals = (m.quals || []).filter(q => q.id !== id); });
+  if (kind === 'incident') S.incidents = S.incidents.filter(i => i.id !== id);
+  if (kind === 'diver') { const [iid, mid] = id.split('~'); const inc = S.incidents.find(i => i.id === iid); if (inc) inc.divers = inc.divers.filter(d => d.memberId !== mid); }
+  if (kind === 'dive') S.incidents.forEach(i => i.divers.forEach(dv => { dv.dives = dv.dives.filter(d => d.id !== id); }));
+}
+function applyDoc(doc) {
+  const { kind, id, data } = doc;
+  if (doc.deleted) { removeFromAll(kind, id); return; }
+  if (kind === 'member') { const m = memberStub(id); const quals = m.quals || []; Object.keys(m).forEach(k => { if (!['id', 'quals'].includes(k)) delete m[k]; }); Object.assign(m, data, { id, quals }); }
+  if (kind === 'qual') { removeFromAll('qual', id); const m = memberStub(data.memberId); m.quals.push({ ...strip(data, 'memberId'), id }); }
+  if (kind === 'incident') { const inc = incStub(id); const divers = inc.divers; Object.keys(inc).forEach(k => { if (!['id', 'divers'].includes(k)) delete inc[k]; }); Object.assign(inc, data, { id, divers }); }
+  if (kind === 'diver') { const inc = incStub(data.incidentId); const dv = diverStub(inc, data.memberId); const dives = dv.dives; Object.keys(dv).forEach(k => { if (k !== 'dives') delete dv[k]; }); Object.assign(dv, strip(data, 'incidentId'), { dives }); }
+  if (kind === 'dive') {
+    removeFromAll('dive', id);
+    const inc = incStub(data.incidentId), dv = diverStub(inc, data.memberId);
+    dv.dives.push({ ...strip(data, 'incidentId', 'memberId'), id });
+    dv.dives.sort((a, b) => String(a.startAt).localeCompare(String(b.startAt)));
+  }
+}
+// 送ったり受け取ったりする。電波がない・ログインしていないときは何もしない
+let syncing = null, syncTimer = null, syncNote = '';
+function syncSoon(ms = 1500) { if (!signedIn()) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), ms); }
+async function syncNow() {
+  if (!signedIn() || syncing) return syncing;
+  if (navigator.onLine === false) { syncNote = 'offline'; renderSyncBadge(); return; }
+  syncing = (async () => {
+    const s = sy();
+    trackChanges();
+    let rounds = 0, changedLocal = false, rejectedMsg = '';
+    let since = s.needFull ? 0 : s.since, refetch = false, refetched = s.needFull;
+    const rejectedKeys = new Set(), seen = new Set();
+    try {
+      while (rounds++ < 30) {
+        const sent = Object.values(s.outbox).slice(0, 400);
+        const res = await fetch(API_BASE + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token }, body: JSON.stringify({ since, changes: sent }) });
+        if (res.status === 401) { s.token = null; syncNote = 'login'; save(); render(); toast('ログインし直してください'); return; }
+        if (!res.ok) throw new Error('http ' + res.status);
+        const body = await res.json();
+        if (body.me) s.me = body.me;
+        // 送れた変更を箱から出す（送ったあとに直したものは残す）
+        for (const d of sent) { const k = keyOf(d.kind, d.id); if (s.outbox[k] && s.outbox[k].updatedAt === d.updatedAt) delete s.outbox[k]; }
+        // 受け付けられなかった変更（サーバーの方が新しい・権限がない）は、サーバーの内容に合わせ直す
+        for (const r of body.rejected || []) { rejectedKeys.add(keyOf(r.kind, r.id)); refetch = true; if (r.reason !== 'stale' && !rejectedMsg) rejectedMsg = r.reason; }
+        const incoming = (body.changes || []).slice().sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || (a.seq - b.seq));
+        for (const d of incoming) {
+          const k = keyOf(d.kind, d.id), mine = s.outbox[k];
+          seen.add(k);
+          if (mine && mine.updatedAt > d.updatedAt) continue; // 端末の方が新しい（次に送る）
+          applyDoc(d); delete s.outbox[k]; changedLocal = true;
+        }
+        since = body.seq;
+        if (body.more || Object.keys(s.outbox).length) continue;
+        if (refetch && !refetched) { refetched = true; refetch = false; since = 0; seen.clear(); continue; }
+        break;
+      }
+      // サーバーに無いのに受け付けられなかったもの（権限のない追加など）は、端末からも消す
+      if (refetched) for (const k of rejectedKeys) if (!seen.has(k)) { const [kind, ...rest] = k.split(':'); removeFromAll(kind, rest.join(':')); changedLocal = true; }
+      s.since = since; s.needFull = false;
+      // 受け取った内容を「知っている状態」にする（受け取ったものを送り返さない）
+      const cur = docsOf(); s.known = {};
+      for (const [k, d] of cur) if (!s.outbox[k]) s.known[k] = JSON.stringify(d.data); else s.known[k] = JSON.stringify(s.outbox[k].data);
+      s.lastAt = new Date().toISOString(); syncNote = '';
+      save();
+      if (changedLocal && !sheet) render(); else renderSyncBadge();
+      if (rejectedMsg) toast(`受け付けられなかった変更があります：${rejectedMsg}`);
+    } catch (e) {
+      syncNote = 'error'; renderSyncBadge();
+    } finally { syncing = null; }
+  })();
+  return syncing;
+}
+function syncBadge() {
+  if (!CLOUD) return '';
+  if (!signedIn()) return `<span class="sync-badge">${ic('circle-alert')}未ログイン</span>`;
+  const n = pendingCount();
+  if (syncNote === 'offline' || navigator.onLine === false) return `<span class="sync-badge">${ic('cloud-off')}電波なし${n ? `・未送信 ${n}件` : ''}</span>`;
+  if (syncNote === 'error') return `<span class="sync-badge">${ic('circle-alert')}未送信 ${n}件・あとで送ります</span>`;
+  if (n) return `<span class="sync-badge">${ic('cloud')}送信中 ${n}件</span>`;
+  return `<span class="sync-badge">${ic('check')}共有済み${S.sync.lastAt ? ` ${hm(S.sync.lastAt)}` : ''}</span>`;
+}
+function renderSyncBadge() { document.querySelectorAll('[data-sync-badge]').forEach(el => { el.innerHTML = syncBadge(); }); }
+window.addEventListener('online', () => { syncNote = ''; syncNow(); });
+window.addEventListener('offline', () => { syncNote = 'offline'; renderSyncBadge(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); });
+setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 30000);
+
+/* ----- ログイン ----- */
+let loginMsg = '';
+function viewLogin() {
+  return `${bar('潜水現場記録', '宮古島市消防本部 潜水隊', false)}
+  <main class="wrap">
+    <section class="stack">
+      <h1><span class="u">ログイン</span></h1>
+      <p class="small">記録は隊の全員で共有します。自分の職員番号と、隊のパスコードを入れてください。</p>
+      <label class="field"><span>職員番号</span><input class="input num" id="li-id" inputmode="numeric" autocomplete="username"></label>
+      <label class="field"><span>隊のパスコード</span><input class="input" id="li-pass" type="password" autocomplete="current-password"></label>
+      ${loginMsg ? `<div class="alert" role="alert">${ic('triangle-alert')}<span>${esc(loginMsg)}</span></div>` : ''}
+      <button class="btn btn-primary btn-big btn-block" data-act="login">${ic('key-round')}ログイン</button>
+      <p class="small">パスコードは隊長に聞いてください。ほかの人に教えないでください。</p>
+    </section>
+  </main>`;
+}
+async function doLogin() {
+  const id = toHalf($('#li-id')?.value || ''), pass = $('#li-pass')?.value || '';
+  if (!id || !pass) { loginMsg = '職員番号とパスコードを入れてください。'; render(); return; }
+  if (navigator.onLine === false) { loginMsg = '電波のある所でログインしてください。'; render(); return; }
+  let res, body;
+  try { res = await fetch(API_BASE + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: id, passcode: pass }) }); body = await res.json(); }
+  catch (e) { loginMsg = 'つながりませんでした。電波を確かめて、もう一度押してください。'; render(); return; }
+  if (!res.ok) { loginMsg = body?.error || 'ログインできませんでした。'; render(); return; }
+  // 見本は送らずに消す。この端末にあった記録（v0.4 までの記録）は、ログインした人の変更として送る
+  S.members = S.members.filter(m => !m.sample);
+  S.incidents = S.incidents.filter(i => !i.sample);
+  S.sync = { token: body.token, me: body.member, since: 0, known: {}, outbox: {}, lastAt: null, needFull: false };
+  loginMsg = '';
+  saved(); go('home'); toast(`${body.member.name}でログインしました`);
+  syncNow();
+}
+function doLogout() {
+  const n = pendingCount();
+  if (n && !logoutConfirm) { logoutConfirm = true; render(); return; }
+  logoutConfirm = false;
+  // この端末の記録を消して、ログイン画面に戻る（共有の記録はサーバーに残る）
+  const keep = { theme: S.settings.theme };
+  S = { ...sampleState(), members: [], incidents: [], settings: { ...sampleState().settings, ...keep, lastBackup: null } };
+  S.sync = { token: null, me: null, since: 0, known: {}, outbox: {}, lastAt: null, needFull: false };
+  saved(); go('login'); toast('ログアウトしました');
+}
+let logoutConfirm = false;
+
 /* ---------- 起動 ---------- */
 (async () => {
   const loaded = await load();
@@ -1664,6 +1890,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet) clo
   S.members.forEach(m => { m.quals ||= []; });
   ready = true;
   save(); render();
+  if (signedIn()) syncNow();
 })();
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|anthropic/.test(location.hostname)) {
   const hadController = !!navigator.serviceWorker.controller;

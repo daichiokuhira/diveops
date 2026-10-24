@@ -17,3 +17,7 @@ node_modules/
 # 台帳のマクロが作る経歴簿・報告書のPDF（氏名入り）
 出力/
 *.pdf
+# Cloudflare（手元の試験用の秘密の値・データ）
+server/.dev.vars
+server/.wrangler/
+.wrangler/

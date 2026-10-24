@@ -14,8 +14,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install openpyxl playwright
+      - run: npm ci
       - run: npm test
+      - run: npm run test:server
       # docs/ がソースから作り直したものと一致しているか（手で直していない・ビルドし忘れていないか）
       - run: npm run build:app && git diff --exit-code -- docs
       - run: python -m playwright install --with-deps chromium
       - run: python tests/e2e.py
+      - run: python tests/e2e_cloud.py

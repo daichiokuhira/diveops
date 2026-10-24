@@ -1,0 +1,20 @@
+# 潜水現場記録の共有 API（Cloudflare Workers ＋ D1）
+# アプリ本体は GitHub Pages。ここは記録を預かる API だけ。
+name = "diveops-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# アプリを開いてよい場所（CORS）。カンマ区切り
+ALLOWED_ORIGINS = "https://daichiokuhira.github.io"
+# 管理者（隊長の指名・パスコードの管理）の職員番号。カンマ区切り。公開時に実際の番号へ変える
+ADMIN_IDS = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "diveops"
+database_id = "LOCAL-ONLY-REPLACE-ON-DEPLOY"
+
+# 秘密の値は wrangler secret put で入れる（ここには書かない）
+#   TEAM_PASSCODE … 隊共通のパスコード
+#   SECRET_KEY    … ログインの証明に使う鍵（長い乱数）

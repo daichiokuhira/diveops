@@ -1,6 +1,6 @@
 {
   "name": "diveops",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "宮古島市消防本部 潜水隊の現場記録アプリと潜水管理台帳",
   "scripts": {
@@ -8,6 +8,11 @@
     "build:ledger": "node tests/sample_rows.js > ledger/build/sample_rows.json && python3 ledger/build_ledger.py release/潜水管理台帳.xlsx && python3 ledger/make_bas.py release/潜水管理マクロ.bas",
     "build": "npm run build:app && npm run build:ledger",
     "test": "node tests/naui2022.js && python3 tests/ledger_roundtrip.py && python3 tests/ledger_import.py && python3 tests/ledger_static.py",
-    "test:e2e": "python3 tests/e2e.py"
+    "test:e2e": "python3 tests/e2e.py",
+    "test:server": "node tests/server_api.mjs",
+    "test:e2e:cloud": "python3 tests/e2e_cloud.py"
+  },
+  "devDependencies": {
+    "wrangler": "4.147.0"
   }
 }
