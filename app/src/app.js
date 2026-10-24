@@ -202,7 +202,7 @@ function diverResults(inc, dv) {
   let prev = null;
   dv.dives.forEach((d, i) => {
     if (d.deleted) { out.push({ deleted: true, no: i + 1, warnings: [], status: 'na' }); return; }
-    if (d.noTime) { out.push({ no: i + 1, warnings: [], status: 'na', noTime: true, endAt: d.endAt }); prev = null; return; }
+    if (d.noTime) { const r = { no: i + 1, warnings: [], status: 'na', noTime: true, group: null, endAt: null, tableDepth: null }; out.push(r); prev = r; return; }
     const r = Engine.computeDive(t, prev, d, { strict: inc.strict });
     r.endAt = d.endAt; r.no = i + 1;
     out.push(r);
@@ -785,7 +785,7 @@ function csvValues(inc, r) {
   const x = r.res;
   const edits = r.edits?.length ? `${r.edits.length}回・最終 ${ymd(r.edits[r.edits.length - 1].at)} ${hm(r.edits[r.edits.length - 1].at)}` : '';
   return [ymd(r.startAt), String(r.memberId), r.name, inc.type, inc.title, inc.site, num(r.maxDepth), num(r.adt), r.si, num(r.tank), num(r.startP), num(r.endP), num(inc.waterTemp), num(inc.visibility),
-    x.status === 'deco' ? '有' : '無', r.condition || '', inc.commanderId ? member(inc.commanderId).name : '', r.note || '',
+    r.imported && r.decoTable ? r.decoTable : (x.status === 'deco' ? '有' : '無'), r.condition || '', inc.commanderId ? member(inc.commanderId).name : '', r.note || '',
     inc.id, r.no, r.noTime ? '' : hm(r.startAt), r.noTime ? '' : hm(r.endAt), x.tableDepth ?? '', x.group ?? '', x.rnt ?? '', x.tnt ?? '', x.mdt ?? '', x.amdt ?? '', statusText(x), x.stop5 ?? '', tableLabel(t), inc.sea, inc.memo,
     `${ymd(inc.createdAt)} ${hm(inc.createdAt)}`, inc.closedAt ? `${ymd(inc.closedAt)} ${hm(inc.closedAt)}` : '',
     r.id, r.deleted ? '削除' : '記録', num(r.plannedDepth), r.ascentAt ? hm(r.ascentAt) : '', r.safetyStop == null ? '' : (r.safetyStop ? '有' : '無'), ...(r.stopMin || r.decoStopDone != null ? [5, num(r.stopMin)] : ['', '']), ascentRate(r),
@@ -946,7 +946,7 @@ async function buildWorkbook(ids, range) {
     const H = ['No', '日付', '区分', '事案・訓練名', '地点', '最大水深(m)', '潜水時間(分)', '水面休息(分)', 'グループ', '減圧停止(表の判定)', '体調異常', '指揮者'];
     H.forEach((h, i) => put(ws, 10, i + 1, h, { font: { bold: true, size: 9.5 }, border: true, wrap: true }));
     st.rows.forEach((x, k) => {
-      [k + 1, dateCell(x.date), x.inc.type, incTitle(x.inc), x.inc.site || '', x.d.maxDepth ?? '', x.d.adt ?? '', x.r.siMin != null ? Math.floor(x.r.siMin) : '', x.r.group ?? '', x.r.status === 'deco' ? '有' : '無', hide ? '' : (x.d.condition || ''), x.inc.commanderId ? member(x.inc.commanderId).name : '']
+      [k + 1, dateCell(x.date), x.inc.type, incTitle(x.inc), x.inc.site || '', x.d.maxDepth ?? '', x.d.adt ?? '', x.r.siMin != null ? Math.floor(x.r.siMin) : '', x.r.group ?? '', x.d.imported && x.d.decoTable ? x.d.decoTable : (x.r.status === 'deco' ? '有' : '無'), hide ? '' : (x.d.condition || ''), x.inc.commanderId ? member(x.inc.commanderId).name : '']
         .forEach((v, i) => put(ws, 11 + k, i + 1, v, { border: true, font: { bold: (i === 9 || i === 10) && v === '有' }, fmt: i === 1 ? 'yyyy/mm/dd' : undefined }));
     });
     if (!st.rows.length) put(ws, 11, 1, 'この期間の潜水はありません。');
@@ -974,7 +974,7 @@ async function buildWorkbook(ids, range) {
   wd.getColumn(1).numFmt = 'yyyy/mm/dd';
   wd.getRow(2).font = F({ bold: true, size: 9.5 });
   wd.views = [{ state: 'frozen', ySplit: 2 }];
-  wd.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: CSV_HEAD.length } };
+  wd.autoFilter = { from: { row: 2, column: 1 }, to: { row: Math.max(rn - 1, 2), column: CSV_HEAD.length } };
   fit(wd, true);
   wd.pageSetup.printArea = `A1:R${Math.max(rn - 1, 2)}`;
   const a1 = wd.getCell('A1'); a1.font = F({ bold: true }); a1.numFmt = '@';
@@ -1055,7 +1055,7 @@ function importPastCSV(text) {
   const nameOf = v => S.members.find(m => m.id === v);
   const known = new Set(); S.incidents.forEach(i => i.divers.forEach(d => d.dives.forEach(x => known.add(x.id))));
   let added = 0, skipped = 0, bad = 0, newMembers = 0, newInc = 0;
-  const badRows = [];
+  const badRows = [], appRows = [];
   const okText = v => v.length <= 120 && !/[\u0000-\u001f<>"'`]/.test(v);
   rows.slice(1).forEach((r, k) => {
     const line = k + 2; // CSVの行番号（見出しが1行目）
@@ -1069,6 +1069,8 @@ function importPastCSV(text) {
     if (known.has(id)) { skipped++; return; }
     if (!nameOf(mid)) { S.members.push({ id: mid, name: F(r, '氏名') || `職員番号 ${mid}`, status: '在籍', quals: [] }); newMembers++; }
     let inc = S.incidents.find(i => i.id === iid);
+    if (inc && !inc.imported) { appRows.push(line); return; } // このスマホで記録した事案は、取り込みで変えない
+    if (inc && no && inc.divers.some(d => d.memberId === mid && d.dives.some(x => String(x.importNo) === String(Number(no) || no)))) { skipped++; return; }
     if (!inc) {
       const st = F(r, '事案開始'), en = F(r, '事案終了');
       const created = isoFromYmdHm(st || F(r, '日付'), st ? st.split(' ')[1] : F(r, '潜降時刻')) || startAt;
@@ -1090,11 +1092,11 @@ function importPastCSV(text) {
     const ss = F(r, '安全停止');
     dv.dives.push({ id, imported: true, importNo: no ? Number(no) || no : null, noTime, startAt, ascentAt, endAt, updatedAt: nowISO(), plannedDepth: num(F(r, '予定水深(m)')), tank: num(F(r, 'タンク容量(L)')), startP: num(F(r, '開始圧(気圧)')), endP: num(F(r, '終了圧(気圧)')),
       maxDepth: num(F(r, '最大水深(m)')), adt: num(F(r, '潜水時間(分)')), safetyStop: ss === '' ? null : ss === '有', stopMin: stop,
-      decoStopDone: (F(r, '減圧停止(表の判定)') || F(r, '減圧停止')) === '有' ? stop : null, condition: F(r, '体調異常'), note: F(r, '備考'), treatAsFirst: F(r, '1本目扱い') !== '' });
+      decoTable: F(r, '減圧停止(表の判定)') || F(r, '減圧停止'), decoStopDone: (F(r, '減圧停止(表の判定)') || F(r, '減圧停止')) === '有' ? stop : null, condition: F(r, '体調異常'), note: F(r, '備考'), treatAsFirst: F(r, '1本目扱い') !== '' });
     dv.dives.sort((a, b) => String(a.startAt).localeCompare(String(b.startAt)));
     known.add(id); added++;
   });
-  return { added, skipped, bad, badRows, newMembers, newInc };
+  return { added, skipped, bad, badRows, appRows, newMembers, newInc };
 }
 
 /* ===== 潜水表 ===== */
@@ -1227,7 +1229,7 @@ function viewSettings() {
       <p class="small">アプリを使う前の潜水記録を、経歴簿に入れます。台帳の「CSV抽出」シートで［CSVで保存］したファイル、またはアプリのCSVを選んでください。同じ記録は二重に入りません。</p>
       <label class="btn btn-block">${ic('upload')}CSVを選んで取り込む<input type="file" id="past-file" accept=".csv,text/csv" hidden></label>
       ${st.lastImport ? `<div class="alert soft">${ic('info')}<span>前回の取り込み（${ymd(st.lastImport.at)} ${hm(st.lastImport.at)}）：${st.lastImport.error ? esc(st.lastImport.error)
-        : `${st.lastImport.added}本・事案 ${st.lastImport.newInc}件・隊員 ${st.lastImport.newMembers}人を追加${st.lastImport.skipped ? `、取り込み済み ${st.lastImport.skipped}本` : ''}${st.lastImport.bad ? `、<b>読めなかった行 ${st.lastImport.bad}行（${(st.lastImport.badRows || []).slice(0, 20).join('・')}行目${(st.lastImport.badRows || []).length > 20 ? ' ほか' : ''}）</b>` : ''}`}</span></div>` : ''}
+        : `${st.lastImport.added}本・事案 ${st.lastImport.newInc}件・隊員 ${st.lastImport.newMembers}人を追加${st.lastImport.skipped ? `、取り込み済み ${st.lastImport.skipped}本` : ''}${st.lastImport.appRows?.length ? `、このスマホで記録した事案の行 ${st.lastImport.appRows.length}行は取り込まず` : ''}${st.lastImport.bad ? `、<b>読めなかった行 ${st.lastImport.bad}行（${(st.lastImport.badRows || []).slice(0, 20).join('・')}行目${(st.lastImport.badRows || []).length > 20 ? ' ほか' : ''}）</b>` : ''}`}</span></div>` : ''}
     </section>
     <section class="stack"><h2>データの控え</h2>
       <p class="small">記録はこのスマホの中だけにあります。端末の故障や機種変更に備えて、月に1回はすべての記録をファイルに控え、署のパソコンなど端末の外に保管してください。<br>
@@ -1629,7 +1631,7 @@ document.addEventListener('change', e => {
     if (r.error) { S.settings.lastImport = { at: nowISO(), error: r.error }; saved(); render(); toast('取り込めませんでした'); return; }
     S.settings.lastImport = { at: nowISO(), ...r };
     saved(); render();
-    toast(!r.added && r.skipped && !r.bad ? `すべて取り込み済みです（${r.skipped}本）` : `${r.added}本を取り込みました（事案 ${r.newInc}件・隊員 ${r.newMembers}人を追加${r.skipped ? `・取り込み済み ${r.skipped}本` : ''}${r.bad ? `・読めない行 ${r.bad}行` : ''}）`, true);
+    toast(!r.added && (r.skipped || r.appRows.length) && !r.bad ? `すべて取り込み済みです（${r.skipped + r.appRows.length}本）` : `${r.added}本を取り込みました（事案 ${r.newInc}件・隊員 ${r.newMembers}人を追加${r.skipped ? `・取り込み済み ${r.skipped}本` : ''}${r.bad ? `・読めない行 ${r.bad}行` : ''}）`, true);
   });
   if (t.id === 'restore-file') readFile(t, text => {
     try { const s = JSON.parse(text.replace(/^\ufeff/, '')); if (!validBackup(s)) throw 0; snapshot(); S = s; S.settings = { lastBackup: null, ...S.settings }; saved(); go('home'); toast('控えから戻しました', true); }

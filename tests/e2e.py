@@ -250,6 +250,13 @@ async def main():
         await pg.set_input_files('#past-file', files=[{'name': 'past.csv', 'mimeType': 'text/csv', 'buffer': past.encode('utf-8')}])
         await pg.wait_for_timeout(300)
         ex('同じCSVは二重に入らない', await pg.locator('#toast >> text=すべて取り込み済みです（2本）').count(), 1)
+        # このスマホで記録した事案と同じ事案IDの行は、取り込みで混ぜない（判定が変わらないように）
+        app_iid = await pg.evaluate(js("return (await getS()).incidents.find(i => !i.sample && !i.imported).id;"), None)
+        mix = ('\ufeff日付,職員番号,氏名,区分,事案・訓練名,地点,最大水深(m),潜水時間(分),事案ID,本数,潜降時刻,浮上時刻\r\n'
+               f'2026/10/24,S02,見本 二郎,訓練,x,y,18,40,{app_iid},1,,\r\n')
+        await pg.set_input_files('#past-file', files=[{'name': 'mix.csv', 'mimeType': 'text/csv', 'buffer': mix.encode('utf-8')}])
+        await pg.wait_for_timeout(300)
+        ex('アプリで記録した事案には取り込まない', await pg.locator('text=このスマホで記録した事案の行 1行は取り込まず').count(), 1)
         await pg.click('[data-act="back"]')
         # 記録・経歴簿
         await pg.click('[data-act="go"][data-to="records"]')
