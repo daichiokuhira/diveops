@@ -142,10 +142,6 @@ try {
   ex('浮上の記録がないまま、潜水中の印は外せない（15分を過ぎたら）', r.body.rejected.map(x => x.reason), ['浮上の記録がないまま、潜水中の印は外せません']);
   r = await post('/api/sync', { since: 0, changes: [doc('dive', 'cur-1', { incidentId: 'K1', memberId: '1002', startAt: t(3600), maxDepth: 10, adt: 30 }, t(8)), doc('diver', 'K1~1002', { incidentId: 'K1', memberId: '1002', current: null }, t(8))] }, M);
   ex('浮上の記録と一緒なら外せる', r.body.rejected, []);
-  const big = JSON.stringify({ since: 0, changes: [doc('incident', 'BIG', { createdAt: t(1), memo: 'x'.repeat(3 * 1024 * 1024) })] });
-  const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(big)); c.close(); } });
-  const rb = await fetch(BASE + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + M }, body: stream, duplex: 'half' });
-  ex('大きさを書かずに送っても2MBを超えれば断る', rb.status, 413);
   r = await post('/api/sync', { since: 0, changes: Array.from({ length: 6 }, (_, i) => doc('incident', 'N' + i, { createdAt: t(1) })) }, M);
   ex('1回に送れる件数を超えたら断り、上限を知らせる', [r.status, r.body.limit], [413, 5]);
 
@@ -185,6 +181,13 @@ try {
   ex('ほかの職員番号は止めない（署で一斉にログインしても）', (await post('/api/login', { memberId: '9001', passcode: PASS })).status, 200);
   const other = await fetch(BASE + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.9' }, body: JSON.stringify({ memberId: '1001', passcode: PASS }) });
   ex('ほかの場所からの本人は締め出されない', other.status, 200);
+
+  // 大きすぎる送信は途中で読むのをやめて断る。そのあとの接続が乱れることがあるので、いちばん最後に試す
+  const big = JSON.stringify({ since: 0, changes: [doc('incident', 'BIG', { createdAt: t(1), memo: 'x'.repeat(3 * 1024 * 1024) })] });
+  const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(big)); c.close(); } });
+  const Z = (await post('/api/login', { memberId: '9001', passcode: PASS })).body.token;
+  const rb = await fetch(BASE + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + Z }, body: stream, duplex: 'half' });
+  ex('大きさを書かずに送っても2MBを超えれば断る', rb.status, 413);
 } catch (e) {
   ng++; console.log('NG 例外', e);
 } finally {
