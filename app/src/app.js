@@ -265,11 +265,9 @@ function toast(msg, undo = false) {
 }
 
 /* ---------- 描画 ---------- */
-let logoSvg = '';
 function bar(title, sub, back, right = '') {
-  logoSvg = logoSvg || emblem({ text: false });
   return `<header class="bar"><div class="bar-in">
-    ${back ? `<button class="btn btn-icon" data-act="back" aria-label="戻る">${ic('chevron-left')}</button>` : `<span class="bar-logo">${logoSvg}</span>`}
+    ${back ? `<button class="btn btn-icon" data-act="back" aria-label="戻る">${ic('chevron-left')}</button>` : ''}
     <div class="bar-title">${title}${sub ? `<span class="bar-sub">${sub}</span>` : ''}</div>${CLOUD ? `<span data-sync-badge>${syncBadge()}</span>` : ''}${right}</div></header>${globalAlerts()}`;
 }
 let updateReady = false;
@@ -1298,7 +1296,7 @@ function viewSettings() {
       <button class="btn" data-act="wipe" ${confirmWipe === '削除' ? '' : 'disabled'}>${ic('trash-2')}すべて消す</button>
     </section>
     <section class="stack about"><h2>このアプリについて</h2>
-      <div class="about-head">${emblem({ top: ORG.emblemTop, bottom: ORG.emblemBottom })}<div><b>潜水現場記録</b><br><span class="small">v${APP_VERSION}・潜水表 ${esc(tableLabel(activeTable()))}<br>${esc(ORG_NAME)}</span></div></div>
+      <p><b>潜水現場記録</b><br><span class="small">v${APP_VERSION}・潜水表 ${esc(tableLabel(activeTable()))}<br>${esc(ORG_NAME)}</span></p>
       <p class="small">紙で残してきた潜水の記録を、現場のスマホで残し、隊の全員で共有するために、${esc(DEVELOPER)}が作りました。潜降・浮上の記録、NAUI潜水表による上限の目安、経歴簿のExcel出力、署の潜水管理台帳への取り込みまでを1つにしています。</p>
       <p class="small"><b>ほかの消防本部でも使えます。</b>本部名・隊名・潜水表・共有の保存先を入れ替えるだけで、同じ仕組みを導入できます（Cloudflare と GitHub の無料の枠で動きます）。導入の相談は、${esc(DEVELOPER)}へ${ORG.contact ? `（${esc(ORG.contact)}）` : ''}。</p>
       <p class="small">開発：${esc(DEVELOPER)}</p>
@@ -1975,10 +1973,6 @@ let loginMsg = '', loginId = '';
 function viewLogin() {
   return `${bar('潜水現場記録', esc(ORG_NAME), false)}
   <main class="wrap">
-    <section class="hero">
-      ${emblem({ top: ORG.emblemTop, bottom: ORG.emblemBottom })}
-      <div><p class="hero-title">潜水現場記録</p><p class="hero-org">${esc(ORG_NAME)}</p></div>
-    </section>
     <section class="stack">
       <h1><span class="u">ログイン</span></h1>
       <p class="small">記録は隊の全員で共有します。自分の職員番号と、隊のパスコードを入れてください。</p>

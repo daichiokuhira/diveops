@@ -219,7 +219,7 @@ async def main():
 
         # ===== v0.4.0：資格・研修、記録・経歴簿、Excel出力、過去の記録の取り込み =====
         await pg.click('[data-act="go"][data-to="settings"]')
-        ex('紋章の透かしと「このアプリについて」（開発元・本部名）', [await pg.locator('.wm .emblem').count(), await pg.locator('.about >> text=開発：宮古島市消防本部 潜水隊').count(), await pg.locator('.bar-sub >> text=宮古島市消防本部 潜水隊').count()], [1, 1, 0])
+        ex('紋章の透かしと「このアプリについて」（開発元・本部名）', [await pg.locator('.wm .emblem').count(), await pg.locator('.about >> text=開発：宮古島市消防本部 潜水隊').count(), await pg.locator('.bar-logo, .hero').count()], [1, 1, 0])
         await pg.click('[data-sheet="member"][data-id="S03"]')
         ex('隊員シートに職員番号', await pg.locator('.sheet >> text=職員番号 S03').count(), 1)
         await pg.click('[data-act="q-kind"][data-v="研修"]')
