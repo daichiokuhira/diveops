@@ -44,12 +44,19 @@ async def login(pg, mid):
     await pg.fill('#li-id', mid); await pg.fill('#li-pass', PASS)
     await pg.click('[data-act="login"]'); await pg.wait_for_timeout(1500)
 
+async def synced(pg, timeout=20000):
+    # 右上が「共有済」になるまで待つ（GitHub の遅いパソコンでも、決め打ちの秒数に頼らない）
+    try: await pg.wait_for_selector('[data-sync-badge] >> text=共有済', timeout=timeout)
+    except Exception: pass
+    await pg.wait_for_timeout(300)
+
 async def refresh(pg):
     # 開き直すと、起動時に共有の記録を取りに行く
-    await pg.reload(); await pg.wait_for_timeout(1800)
+    await pg.reload(); await pg.wait_for_timeout(1200); await synced(pg)
 
 async def settled(pg):
-    await pg.wait_for_timeout(2600)  # 変更の 1.5 秒後に送る
+    await pg.wait_for_timeout(2000)  # 変更の 1.5 秒後に送る
+    await synced(pg)
 
 async def main():
     async with async_playwright() as p:
@@ -122,7 +129,7 @@ async def main():
         ex('電波なしは未送信として表示', await A.locator('[data-sync-badge] >> text=未送信').count() >= 1, True)
         await refresh(C); await C.click('text=共有訓練')
         ex('電波なしの間はほかの端末に届かない', await C.locator('.state >> text=水面休息').count(), 0)
-        await ca.set_offline(False); await A.evaluate("window.dispatchEvent(new Event('online'))"); await A.wait_for_timeout(2500)
+        await ca.set_offline(False); await A.evaluate("window.dispatchEvent(new Event('online'))"); await A.wait_for_timeout(1500); await synced(A)
         await refresh(C); await C.click('text=共有訓練')
         ex('電波が戻ると届く', await C.locator('.state >> text=水面休息').count(), 1)
 
@@ -150,7 +157,7 @@ async def main():
         cg, G = await device(b, 'G')
         await login(G, '1003'); await G.click('text=共有訓練')
         await C.click('[data-sheet="member"][data-id="1003"]'); await C.click('[data-act="p-status"][data-v="異動"]'); await C.click('[data-act="save-member"]'); await C.click('[data-act="sheet-close"]'); await settled(C)
-        await G.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); await G.wait_for_timeout(2000)
+        await G.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); await G.wait_for_timeout(3500)
         ex('共有が止まっても、ボードはそのまま・帯で知らせる', [await G.locator('.diver').count() >= 1, await G.locator('text=共有が止まっています').count()], [True, 1])
 
         # 使う人を替える：電波なしでは替えられない／替えても記録は残る
@@ -161,7 +168,7 @@ async def main():
         await B.click('[data-act="sheet-close"]'); await B.wait_for_timeout(500)
         await B.click('[data-act="logout"]')
         ex('電波なしでは使う人を替えられない', [await B.locator('#li-id').count(), await B.locator('text=電波がないときは').count()], [0, 1])
-        await cb.set_offline(False); await B.evaluate("window.dispatchEvent(new Event('online'))"); await B.wait_for_timeout(2500)
+        await cb.set_offline(False); await B.evaluate("window.dispatchEvent(new Event('online'))"); await B.wait_for_timeout(1500); await synced(B)
         await B.click('[data-act="logout"]'); await B.wait_for_timeout(500)
         ex('使う人を替えるとログイン画面（記録は端末に残る）', await B.locator('#li-id').count(), 1)
         await login(B, '1001')
@@ -198,7 +205,7 @@ async def main():
         # ほかの端末の変更が届いたあとは「元に戻す」を出さない（ほかの端末の記録を消さないため）
         await A.click('[data-act="sheet"][data-sheet="down"][data-i="1002"]'); await A.click('[data-act="down-depth"][data-v="9"]'); await A.click('[data-act="do-down"]')
         await B.click('[data-act="sheet"][data-sheet="editInc"]'); await B.fill('#i-memo', 'B端末のメモ'); await B.click('[data-act="save-inc"]'); await settled(B)
-        await A.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); await A.wait_for_timeout(1500)
+        await A.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); await A.wait_for_timeout(3500)
         ex('ほかの端末の変更が届いたら「元に戻す」は消える', await A.locator('#toast [data-act="undo"]').is_visible(), False)
         # 事案の情報を直したあと、ほかの端末が潜水を記録しても、直した内容は戻らない
         await A.click('[data-act="sheet"][data-sheet="editInc"]'); await A.fill('#i-site', '平良港 第1岸壁'); await A.click('[data-act="save-inc"]'); await settled(A)
@@ -212,7 +219,7 @@ async def main():
         await A.click('[data-act="sheet"][data-sheet="addDiver"]'); await A.click('[data-act="add-diver"][data-v="1001"]'); await settled(A)
         await A.click('[data-act="sheet"][data-sheet="down"][data-i="1001"]')
         await refresh(B); await B.click('text=同期試験'); await B.click('[data-act="sheet"][data-sheet="diver"][data-i="1001"]'); await B.click('[data-act="remove-diver"]'); await settled(B)
-        await A.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); await A.wait_for_timeout(2000)
+        await A.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); await A.wait_for_timeout(3500)
         ex('開いていた潜降の画面は閉じて知らせる', [await A.locator('.sheet').count(), await A.locator('#toast >> text=ほかの端末で事案から外されました').count()], [0, 1])
         # 電波のない間の潜降は、ほかの端末の「外す」より優先（潜水中の人を消さない）
         await A.click('[data-act="sheet"][data-sheet="addDiver"]'); await A.click('[data-act="add-diver"][data-v="1001"]'); await settled(A)
@@ -220,7 +227,7 @@ async def main():
         await ca.set_offline(True)
         await A.click('[data-act="sheet"][data-sheet="down"][data-i="1001"]'); await A.click('[data-act="down-depth"][data-v="6"]'); await A.click('[data-act="do-down"]')
         await B.click('[data-act="sheet"][data-sheet="diver"][data-i="1001"]'); await B.click('[data-act="remove-diver"]'); await settled(B)
-        await ca.set_offline(False); await A.evaluate("window.dispatchEvent(new Event('online'))"); await A.wait_for_timeout(3000)
+        await ca.set_offline(False); await A.evaluate("window.dispatchEvent(new Event('online'))"); await A.wait_for_timeout(1500); await synced(A)
         await refresh(C); await C.click('text=同期試験')
         ex('電波のない間に潜降した人は、外されずに潜水中のまま', await C.locator('.diver:has([data-i="1001"]) >> text=潜水中').count(), 1)
         # 浮上を「元に戻す」してから、もう一度浮上しても潜水は1本（同じ記録IDを使う）
@@ -246,7 +253,7 @@ async def main():
         await A.fill('#u-depth', '5'); await A.dispatch_event('#u-depth', 'input')
         await A.click('[data-act="up-safety"][data-v="有"]'); await A.click('[data-act="up-cond"][data-v="無"]'); await A.click('[data-act="do-up"]')
         await B.click('[data-act="sheet"][data-sheet="diver"][data-i="1005"]'); await B.click('[data-act="remove-diver"]'); await settled(B)
-        await ca.set_offline(False); await A.evaluate("window.dispatchEvent(new Event('online'))"); await A.wait_for_timeout(3500)
+        await ca.set_offline(False); await A.evaluate("window.dispatchEvent(new Event('online'))"); await A.wait_for_timeout(1500); await synced(A)
         await refresh(C); await C.click('text=同期試験')
         ex('電波のない間の潜水は、外されても潜水員ごと残る', await C.locator('[data-sheet="diver"][data-i="1005"] >> text=1本').count(), 1)
         await refresh(B); await B.click('text=同期試験')
