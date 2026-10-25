@@ -118,7 +118,7 @@ async function login(req, env) {
   const id = String(b.memberId || '').normalize('NFKC').trim().slice(0, 40);
   const [nIdIp, nIp] = [await bump(env, `id:${id}|${ip}`, win), await bump(env, `ip:${ip}`, win)];
   if (nIdIp > LIMIT_ID_IP || nIp > LIMIT_IP) return json({ error: 'ログインの失敗が続いたため、15分ほど待ってから試してください。' }, 429);
-  const no = () => json({ error: '職員番号かパスコードが違います。名簿に無い場合は、隊長に登録を頼んでください。' }, 401);
+  const no = () => json({ error: 'IDかパスコードが違います。名簿に無い場合は、隊長に登録を頼んでください。' }, 401);
   if (!okMemberId(id) || !env.TEAM_PASSCODE) return no();
   const mem = await memberRow(env, id);
   const role = roleOf(env, id, mem);

@@ -2628,8 +2628,8 @@ function viewLogin() {
   <main class="wrap">
     <section class="stack">
       <h1><span class="u">ログイン</span></h1>
-      <p class="small">記録は隊の全員で共有します。自分の職員番号と、隊のパスコードを入れてください。</p>
-      <label class="field"><span>職員番号</span><input class="input num" id="li-id" inputmode="numeric" autocomplete="username" value="${esc(loginId)}"></label>
+      <p class="small">記録は隊の全員で共有します。自分のIDと、隊のパスコードを入れてください。</p>
+      <label class="field"><span>ID</span><input class="input num" id="li-id" inputmode="numeric" autocomplete="username" value="${esc(loginId)}"></label>
       <label class="field"><span>隊のパスコード</span><input class="input" id="li-pass" type="password" autocomplete="current-password"></label>
       ${loginMsg ? `<div class="alert" role="alert">${ic('triangle-alert')}<span>${esc(loginMsg)}</span></div>` : ''}
       <button class="btn btn-primary btn-big btn-block" data-act="login">${ic('key-round')}ログイン</button>
@@ -2641,7 +2641,7 @@ function viewLogin() {
 async function doLogin() {
   const id = toHalf($('#li-id')?.value || ''), pass = $('#li-pass')?.value || '';
   loginId = id;
-  if (!id || !pass) { loginMsg = '職員番号とパスコードを入れてください。'; render(); return; }
+  if (!id || !pass) { loginMsg = 'IDとパスコードを入れてください。'; render(); return; }
   if (navigator.onLine === false) { loginMsg = '電波のある所でログインしてください。'; render(); return; }
   let res, body;
   try { res = await fetch(API_BASE + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: id, passcode: pass }) }); body = await res.json(); }

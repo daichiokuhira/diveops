@@ -64,7 +64,7 @@ async def main():
         ca, A = await device(b, 'A')
         ex('最初はログイン画面（まだ共有停止とは出さない）', [await A.locator('#li-id').count(), await A.locator('[data-sync-badge] >> text=共有停止').count()], [1, 0])
         await A.fill('#li-id', '9001'); await A.fill('#li-pass', 'wrong'); await A.click('[data-act="login"]'); await A.wait_for_timeout(800)
-        ex('パスコード違いは入れない', await A.locator('text=職員番号かパスコードが違います').count(), 1)
+        ex('パスコード違いは入れない', await A.locator('text=IDかパスコードが違います').count(), 1)
         await login(A, '9001')
         ex('管理者でログイン（見本は出ない）', [await A.locator('#li-id').count(), await A.locator('text=見本').count()], [0, 0])
 
@@ -148,7 +148,7 @@ async def main():
         await C.click('[data-act="sheet-close"]'); await settled(C)
         cd, D = await device(b, 'D')
         await login(D, '1003')
-        ex('退職した隊員はログインできない', await D.locator('text=職員番号かパスコードが違います').count(), 1)
+        ex('退職した隊員はログインできない', await D.locator('text=IDかパスコードが違います').count(), 1)
 
         # 潜水中に共有が止まっても（在籍の変更・期限切れなど）、画面は替わらず記録を続けられる
         await A.click('[data-act="back"]') if await A.locator('[data-act="back"]').count() else None
