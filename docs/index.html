@@ -191,6 +191,10 @@ table.t tr.on td:first-child { background: linear-gradient(transparent 62%, var(
 .sync-badge { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
 .bar-in [data-sync-badge] { flex: none; }
 
+/* ---- 資格・研修の追加（選んだ名称ごとの欄） ---- */
+.qrow { border: 2px solid var(--ink); border-radius: var(--r); padding: 0.75rem; gap: 0.5rem; }
+.qrow-title { font-size: var(--fs-m); margin: 0; }
+
 /* ---- 紋章（背景の薄い透かしだけ） ---- */
 .wm { position: fixed; inset: 0; z-index: 0; display: grid; place-items: center; pointer-events: none; color: var(--ink); opacity: var(--wm); }
 .wm .emblem { width: min(92vw, 34rem); height: auto; }
@@ -955,6 +959,7 @@ function renderSheet() {
   if (!sheet) { box.innerHTML = ''; box.hidden = true; document.body.style.overflow = ''; if (sheetOpener?.isConnected) sheetOpener.focus(); sheetOpener = null; return; }
   const gone = sheetGone();
   if (gone) { sheet = null; box.innerHTML = ''; box.hidden = true; document.body.style.overflow = ''; toast(gone); return; }
+  if (sheet.name === 'member') qKeep();  // ほかの端末の変更で描き直しても、入れかけの資格の値を消さない
   const fn = { member: sheetMember, down: sheetDown, up: sheetUp, diver: sheetDiver, edit: sheetEdit, addDiver: sheetAddDiver, editInc: sheetEditInc, clearSample: sheetClearSample }[sheet.name];
   const wasOpen = !box.hidden;
   box.innerHTML = `<div class="sheet-back" data-act="sheet-close-back"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${fn()}</div></div>`;
@@ -1301,6 +1306,17 @@ function sheetEdit() {
 const diveSummary = d => `${hm(d.startAt)}→${hm(d.endAt)} ${d.maxDepth ?? '—'}m ${d.adt ?? '—'}分 開始圧${d.startP ?? '—'} 終了圧${d.endP ?? '—'} 安全停止${d.safetyStop ? '有' : '無'} 5m停止${d.decoStopDone ?? d.stopMin ?? '—'}分 体調${d.condition || '—'}`;
 
 /* ----- 隊員の詳細（所属・在籍・資格・研修） ----- */
+// 追加する資格・研修の選択（複数）。{ key: '資格:潜水士免許', kind, name }。name が空ならその他
+const qSel = () => sheet?.qsel || [];
+// 入れかけの値を、画面を描き直す前に控える（選択を変えても消えない）
+function qKeep() {
+  if (!sheet) return;
+  sheet.qvals ||= {};
+  document.querySelectorAll('.qrow').forEach(r => {
+    const g = n => r.querySelector(`[name="${n}"]`)?.value ?? '';
+    sheet.qvals[r.dataset.key] = { name: g('q-name'), date: g('q-date'), exp: g('q-exp'), no: g('q-no'), note: g('q-note') };
+  });
+}
 function sheetMember() {
   const m = S.members.find(x => x.id === sheet.id);
   if (!m) return sheetHead('隊員');
@@ -1332,15 +1348,19 @@ function sheetMember() {
   ${canQual ? '' : '<p class="small">ほかの隊員の資格・研修は、本人か隊長が入れます。</p>'}
   <section class="stack" ${canQual ? '' : 'hidden'}><h2>${esc(m.name)}さんの資格・研修を追加</h2>
     <div class="chips">${['資格', '研修'].map(v => `<button class="chip" data-act="q-kind" data-v="${v}" aria-pressed="${sheet.kind === v}">${ic('check')}${v}</button>`).join('')}</div>
-    <div class="field"><span>名称<b>必須</b></span><div class="chips">${names.map(n => `<button class="chip" data-act="q-pick" data-v="${esc(n)}" aria-pressed="${sheet.qname === n}">${ic('check')}${esc(n)}</button>`).join('')}<button class="chip" data-act="q-pick" data-v="" aria-pressed="${sheet.qname === ''}">${ic('check')}その他</button></div>
-      ${sheet.qname === '' ? '<input class="input" id="q-name" placeholder="名称を入れる">' : ''}</div>
-    <div class="grid2">
-      <label class="field"><span>取得・修了日<b>必須</b></span><input class="input num" id="q-date" type="date"></label>
-      <label class="field"><span>有効期限（あれば）</span><input class="input num" id="q-exp" type="date"></label>
-    </div>
-    <label class="field"><span>期別・番号（任意）</span><input class="input" id="q-no" placeholder="例：第25期"></label>
-    <label class="field"><span>備考（任意）</span><input class="input" id="q-note"></label>
-    <button class="btn btn-primary btn-block" data-act="add-qual">${ic('plus')}${esc(m.name)}さんに追加</button>
+    <div class="field"><span>名称<b>必須</b><span class="small">（いくつでも選べます。資格と研修をまたいでも選べます）</span></span><div class="chips">${names.map(n => `<button class="chip" data-act="q-pick" data-v="${esc(n)}" aria-pressed="${qSel().some(x => x.key === `${sheet.kind}:${n}`)}">${ic('check')}${esc(n)}</button>`).join('')}<button class="chip" data-act="q-pick" data-v="" aria-pressed="${qSel().some(x => x.key === `${sheet.kind}:`)}">${ic('check')}その他</button></div></div>
+    ${qSel().length ? qSel().map(x => { const v = sheet.qvals?.[x.key] || {}; return `<div class="qrow stack" data-key="${esc(x.key)}">
+      <h3 class="qrow-title">${x.name ? esc(x.name) : 'その他の' + esc(x.kind)}<span class="small">（${esc(x.kind)}）</span></h3>
+      ${x.name ? '' : `<label class="field"><span>名称<b>必須</b></span><input class="input" name="q-name" placeholder="名称を入れる" value="${esc(v.name || '')}"></label>`}
+      <div class="grid2">
+        <label class="field"><span>取得・修了日<b>必須</b></span><input class="input num" name="q-date" type="date" value="${esc(v.date || '')}"></label>
+        <label class="field"><span>有効期限（あれば）</span><input class="input num" name="q-exp" type="date" value="${esc(v.exp || '')}"></label>
+      </div>
+      <div class="grid2">
+        <label class="field"><span>期別・番号（任意）</span><input class="input" name="q-no" placeholder="例：第25期" value="${esc(v.no || '')}"></label>
+        <label class="field"><span>備考（任意）</span><input class="input" name="q-note" value="${esc(v.note || '')}"></label>
+      </div></div>`; }).join('') : '<p class="small">名称を選ぶと、取得・修了日を入れる欄が出ます。</p>'}
+    <button class="btn btn-primary btn-block" data-act="add-qual" ${qSel().length ? '' : 'disabled'}>${ic('plus')}${esc(m.name)}さんに${qSel().length > 1 ? `${qSel().length}件を` : ''}追加</button>
   </section>
   ${!lead ? '' : used ? '<p class="small">記録に使われている隊員は削除できません。異動・退職にしてください。</p>' : `<button class="btn btn-quiet" data-act="del-member" data-id="${esc(m.id)}">${ic('trash-2')}この隊員を削除</button>`}`;
 }
@@ -2236,9 +2256,13 @@ document.addEventListener('click', async e => {
     }
     case 'p-status': sheet.status = el.dataset.v; { const keep = [$('#p-name').value, $('#p-unit').value]; renderSheet(); $('#p-name').value = keep[0]; $('#p-unit').value = keep[1]; } break;
     case 'q-kind': case 'q-pick': {
-      const ids = ['#q-name', '#q-date', '#q-exp', '#q-no', '#q-note'], keep = ids.map(id => $(id)?.value ?? '');
-      if (act === 'q-kind') { sheet.kind = el.dataset.v; sheet.qname = null; } else sheet.qname = el.dataset.v;
-      renderSheet(); ids.forEach((id, k) => { if ($(id)) $(id).value = keep[k]; }); break;
+      qKeep();
+      if (act === 'q-kind') sheet.kind = el.dataset.v;
+      else {
+        const key = `${sheet.kind}:${el.dataset.v}`, sel = qSel();
+        sheet.qsel = sel.some(x => x.key === key) ? sel.filter(x => x.key !== key) : [...sel, { key, kind: sheet.kind, name: el.dataset.v }];
+      }
+      renderSheet(); break;
     }
     case 'confirm-qual': {
       const m = S.members.find(x => x.id === sheet.id), q = (m.quals || []).find(x => x.id === el.dataset.id);
@@ -2259,11 +2283,15 @@ document.addEventListener('click', async e => {
     case 'add-qual': {
       const m = S.members.find(x => x.id === sheet.id);
       if (!isLeader() && me()?.id !== m.id) break;
-      const q = { id: uid(), kind: sheet.kind || '資格', name: normQualName(sheet.qname || $('#q-name')?.value || ''), date: $('#q-date').value, expires: $('#q-exp').value, no: $('#q-no').value.trim(), note: $('#q-note').value.trim(), addedAt: nowISO() };
-      if (!q.name || !q.date) { toast('名称と取得・修了日を入れてください'); break; }
-      if (q.date > todayDash()) { toast('取得・修了日が未来の日付です'); break; }
-      if (q.expires && q.expires < q.date) { toast('有効期限が取得日より前です'); break; }
-      snapshot(); (m.quals ||= []).push(q); sheet.qname = null; saved(); renderSheet(); render(); toast(`${m.name}（${m.id}）に${q.name}を追加しました`, true); break;
+      qKeep();
+      const now = nowISO();
+      const qs = qSel().map(x => { const v = sheet.qvals?.[x.key] || {}; return { id: uid(), kind: x.kind, name: normQualName(x.name || (v.name || '').trim()), date: v.date || '', expires: v.exp || '', no: (v.no || '').trim(), note: (v.note || '').trim(), addedAt: now }; });
+      // 1件でも足りなければ、どれも追加しない（どれが入ったか分からなくならないように）
+      const bad = qs.map(q => !q.name ? '名称を入れてください' : !q.date ? `${q.name}の取得・修了日を入れてください` : q.date > todayDash() ? `${q.name}の取得・修了日が未来の日付です` : q.expires && q.expires < q.date ? `${q.name}の有効期限が取得日より前です` : '').find(Boolean);
+      if (!qs.length) { toast('名称を選んでください'); break; }
+      if (bad) { toast(bad); break; }
+      snapshot(); (m.quals ||= []).push(...qs); sheet.qsel = []; sheet.qvals = {}; saved(); renderSheet(); render();
+      toast(`${m.name}（${m.id}）に${qs.length > 1 ? `${qs.length}件（${qs.map(q => q.name).join('・')}）` : qs[0].name}を追加しました`, true); break;
     }
     case 'del-qual': { const m = S.members.find(x => x.id === sheet.id); snapshot(); m.quals = (m.quals || []).filter(q => q.id !== el.dataset.id); saved(); renderSheet(); render(); toast('削除しました', true); break; }
     case 'del-member': {
