@@ -60,6 +60,9 @@ preview = f'''{head_common}
 man = json.loads((src/'manifest.webmanifest').read_text())
 man['description'] = f"{ORG.get('org', '')} {ORG.get('unit', '潜水隊')}の現場記録アプリ（開発：宮古島市消防本部 潜水隊）".strip()
 (dist/'manifest.webmanifest').write_text(json.dumps(man, ensure_ascii=False, indent=2))
+# 中身が変われば sw.js も変わるようにする（同じ版番号のまま直しても、スマホの古い版が入れ替わる）
+import hashlib
+build = f"{VERSION}-{hashlib.sha1(b''.join((dist/n).read_bytes() if n != 'index.html' else full.encode() for n in ('index.html', 'manifest.webmanifest')) + b''.join((src/n).read_bytes() for n in ('icon-192.png', 'icon-512.png', 'apple-touch-icon.png') if (src/n).exists())).hexdigest()[:8]}"
 (dist/'sw.js').write_text((src/'sw.js').read_text().replace('__BUILD__', build))
 (dist/'潜水表_NAUI2022.json').write_text(json.dumps(json.loads((tables/'naui-2022.json').read_text()), ensure_ascii=False, indent=1))
 (ROOT/'app'/'preview').mkdir(exist_ok=True)
