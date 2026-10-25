@@ -3,6 +3,9 @@
 name = "diveops-api"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
+# 公開先：https://diveops-api.miyako-dive.workers.dev（版ごとの試し用アドレスは出さない）
+workers_dev = true
+preview_urls = false
 
 [vars]
 # アプリを開いてよい場所（CORS）。カンマ区切り

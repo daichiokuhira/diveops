@@ -1,10 +1,13 @@
 """スマホ幅での画面テスト（Playwright）。一連の操作をして、画面とCSVの中身を確かめる。
 撮った画面は tests/shots/ に保存する（コミットしない）。"""
-import asyncio, http.server, threading, functools, os, sys, csv, io
+import asyncio, http.server, threading, functools, os, sys, csv, io, shutil, subprocess, tempfile
 from playwright.async_api import async_playwright
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORT = 8765
-srv = http.server.ThreadingHTTPServer(('127.0.0.1', PORT), functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.path.join(ROOT, 'docs')))
+# 共有しない設定（端末だけ）で作ったアプリを試す。公開する docs/ は共有の設定なので使わない
+dist = tempfile.mkdtemp(prefix='diveops-local-')
+subprocess.run([sys.executable, 'app/build.py'], cwd=ROOT, check=True, stdout=subprocess.DEVNULL, env={**os.environ, 'DIVEOPS_API_BASE': '', 'DIVEOPS_DIST': dist})
+srv = http.server.ThreadingHTTPServer(('127.0.0.1', PORT), functools.partial(http.server.SimpleHTTPRequestHandler, directory=dist))
 srv.RequestHandlerClass.log_message = lambda *a: None
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = f'http://127.0.0.1:{PORT}/index.html'
@@ -353,5 +356,5 @@ async def main():
     return ng
 
 ng_count = asyncio.run(main())
-srv.shutdown()
+srv.shutdown(); shutil.rmtree(dist, ignore_errors=True)
 sys.exit(1 if ng_count else 0)
