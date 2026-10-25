@@ -164,6 +164,16 @@ try {
   const g1 = r.body.changes.find(c => c.id === 'G1');
   ex('消された事案は中身ごと戻る', [g1.deleted, g1.data.title, g1.data.site], [false, '戻る事案', '佐良浜']);
 
+  // 3周目：潜水員の id と中身、持ち主の固定、外された潜水員に潜水が届いたら戻す
+  r = await post('/api/sync', { since: 0, changes: [doc('diver', 'K1~9999', { incidentId: 'K1', memberId: '1002' }, t(5))] }, M);
+  ex('潜水員の id と中身が合わなければ受け付けない', r.body.rejected.map(x => x.reason), ['形が正しくありません']);
+  r = await post('/api/sync', { since: 0, changes: [doc('dive', 'cur-1', { incidentId: 'K1', memberId: '1001', startAt: t(3600) }, t(4))] }, M);
+  ex('潜水の持ち主は替えられない', r.body.rejected.map(x => x.reason), ['記録の持ち主は替えられません']);
+  await post('/api/sync', { since: 0, changes: [doc('incident', 'H1', { createdAt: t(900) }, t(900)), doc('diver', 'H1~1002', { incidentId: 'H1', memberId: '1002' }, t(900))] }, M);
+  await post('/api/sync', { since: 0, changes: [doc('diver', 'H1~1002', {}, t(60), true)] }, L);
+  r = await post('/api/sync', { since: 0, changes: [doc('dive', 'HD', { incidentId: 'H1', memberId: '1002', startAt: t(800), maxDepth: 9, adt: 20 }, t(70))] }, M);
+  ex('外された潜水員に潜水が届いたら、潜水員も戻る', r.body.changes.find(c => c.id === 'H1~1002')?.deleted, false);
+
   // 退職にすると、その人の証明は使えなくなる
   await post('/api/sync', { since: 0, changes: [doc('member', '1002', { name: '見本 二郎', status: '退職' })] }, L);
   ex('退職した隊員の証明は使えない', (await post('/api/sync', { since: 0, changes: [] }, M)).status, 401);

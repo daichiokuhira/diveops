@@ -1425,12 +1425,13 @@ document.addEventListener('click', async e => {
       if (Number.isNaN(sp) || Number.isNaN(tk)) { toast('開始圧とタンク容量は数字で入れてください'); break; }
       dv.tank = tk || dv.tank;
       if (dv.current) { sheet = null; render(); toast('この潜水員の潜降は、ほかの端末で記録されています'); break; }
+      delete dv._stub; delete inc._stub;
       dv.current = { id: uid(), startAt: nowISO(), plannedDepth: sheet.depth, startP: sp === '' ? null : sp, tank: dv.tank };
       touch(inc); saved(); sheet = null; render(); toast(`${member(dv.memberId).name}　潜降 ${hm(dv.current.startAt)}`, true); break;
     }
     case 'ascent-undo': { const dv = DVof(inc, I); snapshot(); dv.current.ascentAt = null; touch(inc); saved(); render(); toast('浮上開始を取り消しました'); break; }
     case 'ascent': {
-      const dv = DVof(inc, I); snapshot();
+      const dv = DVof(inc, I); snapshot(); delete dv._stub;
       dv.current.ascentAt = nowISO();
       touch(inc); saved(); render(); toast(`${member(dv.memberId).name}　浮上開始 ${hm(dv.current.ascentAt)}`, true); break;
     }
@@ -1462,7 +1463,10 @@ document.addEventListener('click', async e => {
       if (msg) { toast(msg); break; }
       const stopMin = r.status === 'deco' ? deco : (sheet.safety === '有' ? u.stopMin : 0);
       snapshot();
-      dv.dives.push({ id: c.id || uid(), startAt: c.startAt, ascentAt: u.ascentAt, endAt: u.endAt, plannedDepth: c.plannedDepth, tank: c.tank ?? dv.tank, startP: c.startP, endP: endP === '' ? null : endP,
+      delete dv._stub; delete inc._stub;
+      const did = c.id || uid();
+      dv.dives = dv.dives.filter(x => x.id !== did);
+      dv.dives.push({ id: did, startAt: c.startAt, ascentAt: u.ascentAt, endAt: u.endAt, plannedDepth: c.plannedDepth, tank: c.tank ?? dv.tank, startP: c.startP, endP: endP === '' ? null : endP,
         updatedAt: nowISO(), maxDepth: depth, adt, safetyStop: sheet.safety === '有', stopMin: stopMin || 0, decoStopDone: r.status === 'deco' ? deco : null, condition: sheet.cond, note: sheet.note, treatAsFirst: !!dv.nextFirst });
       dv.nextFirst = false; dv.current = null;
       touch(inc); saved(); sheet = null; render(); toast(`${member(dv.memberId).name}　浮上 ${hm(u.endAt)}`, true); break;
@@ -1716,6 +1720,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet) clo
    文書：member（隊員）・qual（資格・研修）・incident（事案）・diver（事案の潜水員）・dive（潜水1本） */
 const CLOUD = !!API_BASE;
 const KIND_ORDER = { member: 0, qual: 1, incident: 2, diver: 3, dive: 4 };
+const SEND_ORDER = { member: 0, qual: 1, incident: 2, dive: 3, diver: 4 };
 const keyOf = (kind, id) => `${kind}:${id}`;
 const sy = () => (S.sync ||= { token: null, me: null, since: 0, known: {}, outbox: {}, lastAt: null, needFull: false });
 const signedIn = () => CLOUD && !!S.sync?.token;
@@ -1766,8 +1771,14 @@ function trackChanges() {
     s.outbox[k] = entry; s.known[k] = h;
   }
   for (const k of Object.keys(s.known)) if (!cur.has(k)) {
-    const [kind, ...rest] = k.split(':');
-    s.outbox[k] = { kind, id: rest.join(':'), data: {}, deleted: true, updatedAt: now };
+    const [kind, ...rest] = k.split(':'), id = rest.join(':');
+    if (kind === 'dive') {
+      // 潜水の記録は消さない：最後に知っている中身に「削除済み」を付けて送る（元に戻すで消えた浮上など）
+      let data = null; try { data = JSON.parse(s.known[k]); } catch (e) {}
+      if (data && !data.deleted) { const d2 = { ...data, deleted: true }; s.outbox[k] = { kind, id, data: d2, deleted: false, updatedAt: now }; s.known[k] = JSON.stringify(d2); }
+      continue;
+    }
+    s.outbox[k] = { kind, id, data: {}, deleted: true, updatedAt: now };
     delete s.known[k];
   }
 }
@@ -1797,10 +1808,23 @@ function removeFromAll(kind, id) {
   if (kind === 'diver') { const [iid, mid] = id.split('~'); const inc = S.incidents.find(i => i.id === iid); if (inc) inc.divers = inc.divers.filter(d => d.memberId !== mid); }
   if (kind === 'dive') S.incidents.forEach(i => i.divers.forEach(dv => { dv.dives = dv.dives.filter(d => d.id !== id); }));
 }
+// 端末にだけある（まだ送っていない）潜水、または潜水中の人がいるか
+function hasLocalDiving(inc, mid) {
+  const ob = S.sync?.outbox || {};
+  return inc.divers.some(dv => (mid == null || dv.memberId === mid) && (dv.current || dv.dives.some(d => ob[keyOf('dive', d.id)])));
+}
 function applyDoc(doc) {
   const { kind, id } = doc;
   if (!DocSchema.kinds.includes(kind) || typeof id !== 'string' || !id || id.length > 120 || /[\u0000-\u001f<>"'`&]/.test(id)) return false;
-  if (doc.deleted) { removeFromAll(kind, id); return true; }
+  if (doc.deleted) {
+    if (kind === 'diver' || kind === 'incident') {
+      const [iid, mid] = kind === 'diver' ? id.split('~') : [id, null];
+      const inc = S.incidents.find(i => i.id === iid);
+      if (inc && hasLocalDiving(inc, mid)) return false; // 電波のない間の潜水を消さない（送ればサーバーで戻る）
+    }
+    if (kind === 'dive') return false; // 潜水の記録は消さない
+    removeFromAll(kind, id); return true;
+  }
   // 届いた中身は、決めた形だけを残してから使う（細工した文字列や、数字に見せかけた文字を画面に出さない）
   const data = DocSchema.clean(kind, doc.data);
   if (!data) return false;
@@ -1837,7 +1861,7 @@ async function syncNow() {
     try {
       while (rounds++ < 200) {
         if (!s.fresh) trackChanges();
-        const sent = s.fresh ? [] : Object.values(s.outbox).slice(0, s.limit || 5);
+        const sent = s.fresh ? [] : Object.values(s.outbox).sort((a, b) => (SEND_ORDER[a.kind] - SEND_ORDER[b.kind]) || String(a.updatedAt).localeCompare(String(b.updatedAt))).slice(0, s.limit || 5);
         for (const d of sent) sentStamp[keyOf(d.kind, d.id)] = d.updatedAt;
         const t0 = Date.now();
         const res = await fetch(API_BASE + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token }, body: JSON.stringify({ since, changes: sent }) });

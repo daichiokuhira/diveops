@@ -161,6 +161,12 @@ function checkChange(user, ch, cur) {
 // 記録を守るための決まり（潜水中の人や、潜水の記録が消えるのを防ぐ）
 async function guard(env, ch, cur, data, batchIds, nowMs) {
   if (ch.deleted && ch.kind === 'dive') return '潜水の記録は消せません（「削除済み」にしてください）';
+  if (!ch.deleted && ch.kind === 'diver' && ch.id !== `${data.incidentId}~${data.memberId}`) return '形が正しくありません';
+  if (!ch.deleted && cur && cur.data && (ch.kind === 'dive' || ch.kind === 'diver' || ch.kind === 'qual')) {
+    // 潜水・潜水員・資格の持ち主（事案・職員番号）は、あとから替えられない
+    if (cur.data.memberId && cur.data.memberId !== data.memberId) return '記録の持ち主は替えられません';
+    if (cur.data.incidentId && cur.data.incidentId !== data.incidentId) return '記録の事案は替えられません';
+  }
   if (!cur || cur.deleted) return null;
   if (ch.kind === 'diver') {
     const was = cur.data.current;
@@ -264,6 +270,12 @@ async function sync(req, env, user) {
       if (!ch.deleted && (ch.kind === 'diver' || ch.kind === 'dive')) {
         stmts.push(env.DB.prepare("UPDATE meta SET v = v + 1 WHERE k = 'seq' AND EXISTS (SELECT 1 FROM docs WHERE kind = 'incident' AND id = ? AND deleted = 1)").bind(data.incidentId));
         stmts.push(env.DB.prepare("UPDATE docs SET deleted = 0, server_at = ?, updated_at = ?, seq = (SELECT v FROM meta WHERE k = 'seq') WHERE kind = 'incident' AND id = ? AND deleted = 1").bind(now, now, data.incidentId));
+      }
+      if (!ch.deleted && ch.kind === 'dive' && !data.deleted) {
+        // 外された潜水員に、電波のない間の潜水が届いたら、潜水員も戻す（潜水の記録が宙に浮かないように）
+        const did = `${data.incidentId}~${data.memberId}`;
+        stmts.push(env.DB.prepare("UPDATE meta SET v = v + 1 WHERE k = 'seq' AND EXISTS (SELECT 1 FROM docs WHERE kind = 'diver' AND id = ? AND deleted = 1)").bind(did));
+        stmts.push(env.DB.prepare("UPDATE docs SET deleted = 0, server_at = ?, updated_at = ?, seq = (SELECT v FROM meta WHERE k = 'seq') WHERE kind = 'diver' AND id = ? AND deleted = 1").bind(now, now, did));
       }
       const res = await env.DB.batch(stmts);
       if (res[1].meta.changes) { done = true; break; }
