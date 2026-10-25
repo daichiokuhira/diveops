@@ -57,6 +57,8 @@ try {
   ex('隊長は隊長を指名できない', r.body.rejected.map(x => x.reason), ['隊長の指名は管理者だけができます']);
   r = await post('/api/sync', { since: 0, changes: [doc('qual', 'q1', { memberId: '1002', kind: '資格', name: '潜水士免許', date: '2020-01-01' })] }, M);
   ex('隊員は自分の資格を入れられる', r.body.rejected, []);
+  r = await post('/api/sync', { since: 0, changes: [doc('qual', 'qc', { memberId: '1002', kind: '資格', name: 'Cカード', org: 'PADI', level: 'アドバンスド', date: '2010-08-01' })] }, M);
+  { const c = r.body.changes.find(x => x.id === 'qc'); ex('Cカードの指導団体・ランクも共有される', [c?.data.org, c?.data.level], ['PADI', 'アドバンスド']); }
   r = await post('/api/sync', { since: 0, changes: [doc('qual', 'q2', { memberId: '1001', kind: '資格', name: '潜水士免許', date: '2020-01-01' })] }, M);
   ex('他人の資格は入れられない', r.body.rejected.map(x => x.reason), ['自分以外の資格・研修は入力できません']);
   r = await post('/api/sync', { since: 0, changes: [doc('qual', 'q1', { memberId: '1002', kind: '資格', name: '潜水士免許', date: '2020-01-01', confirmedAt: t(0) })] }, M);
