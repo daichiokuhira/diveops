@@ -6,12 +6,14 @@
 <title>潜水現場記録 職員向けまとめ</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap">
 <style>
-/* 配布用A4・1枚。アプリと同じ白黒＋黄（黄は見出しの下線だけ）。印刷するので明るい表示に固定 */
-:root { --ink: #141414; --sub: #4A4A45; --line: #141414; --paper: #FFFFFF; --soft: #F4F4F1; --accent: #FFD400; color-scheme: light; }
+/* 配布用A4・1枚。アプリと同じ紺と黄（黄は見出しの下線だけ）。印刷するので明るい表示に固定 */
+:root { --ink: #1a2b4c; --sub: #46536b; --line: #1a2b4c; --paper: #FFFFFF; --soft: #F3F5F9; --accent: #FFD400; color-scheme: light; }
 @page { size: A4; margin: 10mm 11mm; }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', Meiryo, sans-serif; font-size: 9.8pt; line-height: 1.5; }
-.page { max-width: 188mm; margin: 0 auto; padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 8px; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', Meiryo, sans-serif; font-size: 9.3pt; line-height: 1.45; }
+.wm { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; color: var(--ink); opacity: 0.05; z-index: 0; }
+.wm svg { width: min(92vw, 150mm); height: auto; }
+.page { position: relative; z-index: 1; max-width: 188mm; margin: 0 auto; padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 6px; }
 @media print { .page { padding: 0; max-width: none; } }
 header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; border-bottom: 3px solid var(--line); padding-bottom: 6px; flex-wrap: wrap; }
 h1 { font-size: 19pt; font-weight: 900; margin: 0; line-height: 1.15; }
@@ -48,18 +50,37 @@ footer b { font-weight: 700; }
 </style>
 </head>
 <body>
+<div class="wm" aria-hidden="true"><svg class="emblem" viewBox="-256 -256 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <g fill="#ffffff" stroke="currentColor" stroke-width="22" stroke-linejoin="round"><path d="M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z" transform="rotate(0)"/><path d="M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z" transform="rotate(90)"/><path d="M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z" transform="rotate(180)"/><path d="M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z" transform="rotate(270)"/></g>
+  <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linejoin="round"><path d="M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z" transform="rotate(0)"/><path d="M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z" transform="rotate(90)"/><path d="M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z" transform="rotate(180)"/><path d="M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z" transform="rotate(270)"/></g>
+  <text x="0" y="-150" text-anchor="middle" font-size="46" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif" font-weight="900" fill="currentColor" stroke="none">119</text>
+  <text x="0" y="186" text-anchor="middle" font-size="40" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif" font-weight="900" fill="currentColor" stroke="none">DIVE</text>
+  <g transform="translate(-166 0) rotate(-90)" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"><path d="M-34 -14 H34 M-34 14 H34 M-22 -14 V14 M-4 -14 V14 M14 -14 V14 M32 -14 V14"/></g>
+  <g transform="translate(166 0)" fill="currentColor" stroke="none"><path d="M0 -40 C14 -22 30 -10 26 12 C23 30 10 38 0 38 C-10 38 -24 30 -26 12 C-28 -4 -16 -12 -10 -26 C-6 -14 -2 -8 4 -6 C6 -18 2 -28 0 -40 Z"/></g>
+  <circle r="118" fill="#ffffff" stroke="currentColor" stroke-width="12"/>
+  <circle r="80" fill="none" stroke="currentColor" stroke-width="5"/>
+  <defs><path id="em0sbe53a" d="M-92 0 A92 92 0 0 1 92 0"/><path id="em0sbe53b" d="M-108 0 A108 108 0 0 0 108 0"/></defs>
+  <text font-size="22" letter-spacing="2" text-anchor="middle" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif" font-weight="900" fill="currentColor" stroke="none"><textPath href="#em0sbe53a" startOffset="50%">MIYAKOJIMA FIRE</textPath></text>
+  <text font-size="22" letter-spacing="2" text-anchor="middle" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif" font-weight="900" fill="currentColor" stroke="none"><textPath href="#em0sbe53b" startOffset="50%">DIVE RESCUE</textPath></text>
+  <circle cx="-99" cy="0" r="5" fill="currentColor" stroke="none"/><circle cx="99" cy="0" r="5" fill="currentColor" stroke="none"/>
+  <g stroke="currentColor" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="-46" y="-44" width="92" height="62" fill="none"/>
+    <path d="M-46 -44 L-46 -28 L30 18 L46 18 L46 2 L-30 -44 Z" fill="currentColor" stroke-width="3"/>
+    <path d="M-50 44 q12.5 -11 25 0 t25 0 t25 0 t25 0" fill="none"/>
+  </g>
+</svg></div>
 <div class="page">
 <header>
   <h1>潜水現場記録　職員向けまとめ</h1>
-  <p>宮古島市消防本部 潜水隊　v0.4.0</p>
+  <p>宮古島市消防本部 潜水隊　v0.5.0（隊の全員で共有）</p>
 </header>
 
 <section>
   <h2>3つの約束</h2>
   <div class="promise">
     <div><b>1　判定は「計算の目安」</b><span>ダイブコンピュータと指揮者の判断が優先。</span></div>
-    <div><b>2　1事案1台、その日に送る</b><span>2台に分けると反復潜水が甘く計算される。</span></div>
-    <div><b>3　正本は署の台帳</b><span>スマホは手帳。壊れると未送信の記録は消える。</span></div>
+    <div><b>2　1人の潜水員は1台で記録</b><span>電波のない現場では1事案を1台で。届いていない潜水があると反復潜水が甘くなる。</span></div>
+    <div><b>3　正本は署の台帳</b><span>共有の記録を「台帳用CSV」で取り込み、PDFと台帳で5年保存。</span></div>
   </div>
 </section>
 
@@ -71,11 +92,11 @@ footer b { font-weight: 700; }
 <section>
   <h2>全体像</h2>
   <div class="map">
-    <div class="box"><small>現場（フロント）</small><b>現場用スマホのアプリ</b><br>記録・潜水表の計算・保存・Excel出力。電波なしで動く</div>
-    <div class="arrow">CSVをメール →<br>← 潜水表ファイル</div>
-    <div class="box"><small>署（バックエンド）</small><b>Excel 潜水管理台帳</b><br>正本。取り込み・経歴簿・報告書PDF。5年保存</div>
+    <div class="box"><small>現場・各自（フロント）</small><b>スマホのアプリ</b><br>記録・潜水表の計算・資格の入力。電波なしでも動き、つながったら自動で送る</div>
+    <div class="arrow">← 記録を共有 →<br>職員番号＋隊のパスコード</div>
+    <div class="box"><small>共有の保存先（バックエンド）</small><b>Cloudflare（市の許可済み）</b><br>全員の記録を1か所に。誰が・いつ変えたかも残る</div>
   </div>
-  <p class="note">インターネット上のサーバーはありません。アプリの置き場所（GitHub Pages）はアプリ本体を配るだけで、記録は送られません。</p>
+  <p class="note">署のパソコンもブラウザで同じアプリを開いてログインし、「記録・経歴簿」→「台帳用CSV」を Excel 潜水管理台帳（正本）に取り込む。メールで送る必要はありません。</p>
 </section>
 
 <section>
@@ -86,20 +107,20 @@ footer b { font-weight: 700; }
     <li>浮上開始：合図で押す（潜水時間はここまで）</li>
     <li>水面に着いた：最大水深・安全停止・体調異常</li>
     <li>水面休息：「次に18mなら10分まで」が更新</li>
-    <li>終了の手続き→「事案を終了する」→「メールで送る」</li>
+    <li>終了の手続き→「事案を終了する」（自動で共有）</li>
   </ol>
-  <p class="note">残り5分で太枠、上限を超えると <span class="inv">上限超過</span> と白黒反転。押し間違いはお知らせの「元に戻す」。浮上開始を押し忘れたら「もう水面にいる」。</p>
+  <p class="note">残り5分で太枠、上限を超えると <span class="inv">上限超過</span> と反転。押し間違いはお知らせの「元に戻す」。浮上開始を押し忘れたら「もう水面にいる」。右上の「未送信」は電波が戻ると自動で送る。</p>
 </section>
 
 <div class="two">
   <section>
     <h2>資格・研修（全員）</h2>
-    <p>設定→自分の名前→<b>職員番号を確かめる</b>→名称をボタンで選ぶ→取得日・期限を入れて追加。表示は「未確認」。担当者が免許証・修了証の写しを見て「確かめた」を押すと確認済み。</p>
+    <p>設定→自分の名前→<b>職員番号を確かめる</b>→名称をボタンで選ぶ→取得日・期限を入れて追加。自分のスマホから入れてよい。表示は「未確認」。<b>隊長</b>が免許証・修了証の写しを見て「証の写しで確かめた」を押すと確認済み。</p>
     <p class="note">免許の登録がない人を潜水員に選ぶと「× 潜水士免許の登録がありません」と出る。</p>
   </section>
   <section>
     <h2>記録・経歴簿とExcel</h2>
-    <p>ホーム→「記録・経歴簿」→期間と隊員を選ぶ→「Excel」。シートは隊員一覧・経歴簿（1人1枚）・潜水記録（参照用）・資格・研修。台帳へは「台帳用CSV」を取り込む。</p>
+    <p>ホーム→「記録・経歴簿」→期間と隊員を選ぶ→「Excel」。どの端末で記録した潜水も入る。シートは隊員一覧・経歴簿（1人1枚）・潜水記録（参照用）・資格・研修。台帳へは「台帳用CSV」を取り込む。</p>
     <p class="note">ファイルには氏名と体調異常が入る。送り先は署のアドレスだけ。</p>
   </section>
 </div>
@@ -108,18 +129,19 @@ footer b { font-weight: 700; }
   <section>
     <h2>役割</h2>
     <table>
-      <tr><th>全員</th><td>3つの約束。自分の資格・研修を入れる</td></tr>
-      <tr><th>指揮者・記録係</th><td>現場で記録し、その日のうちに送る</td></tr>
-      <tr><th>台帳の担当者</th><td>取り込み、資格の確認、報告書PDF、月1回の控え</td></tr>
-      <tr><th>管理者（2名）</th><td>アプリの更新、潜水表の差し替え（2名で照合）</td></tr>
+      <tr><th>隊員</th><td>3つの約束。現場の記録。自分の資格・研修を入れる</td></tr>
+      <tr><th>隊長</th><td>隊員の登録・異動・退職、資格の確認、過去の記録の取り込み</td></tr>
+      <tr><th>台帳の担当者</th><td>台帳用CSVの取り込み、報告書PDF</td></tr>
+      <tr><th>管理者</th><td>隊長の指名、パスコードの管理、アプリの更新、潜水表の差し替え（2名で照合）</td></tr>
     </table>
   </section>
   <section class="faq">
     <h2>よくある質問</h2>
-    <p><b>電波がない所でも？</b>　一度開いておけば使える。</p>
+    <p><b>電波がない所でも？</b>　使える。記録は貯めて、つながったら自動で送る。</p>
     <p><b>間違えたら？</b>　名前→直したい本→理由を入れて保存。履歴が残る。</p>
-    <p><b>添付が消えたら？</b>　「コピー」で貼って送り、担当者に知らせる。</p>
-    <p><b>スマホを替える？</b>　設定「控えを作る」→新しいスマホで「控えから戻す」。</p>
+    <p><b>スマホを替える・壊れた？</b>　新しいスマホでログインすれば、共有の記録がそのまま出る。</p>
+    <p><b>現場用スマホを別の人が使う？</b>　設定「使う人を替える」。記録は残る。</p>
+    <p><b>パスコードは？</b>　隊長に聞く。人に教えない。漏れたらすぐ変える。</p>
     <p><b>ダイコンと違う？</b>　厳しい方に従い、指揮者が判断。</p>
   </section>
 </div>
@@ -128,7 +150,7 @@ footer b { font-weight: 700; }
   <span><b>アプリ</b>　https://daichiokuhira.github.io/diveops/（ホーム画面に追加し、アイコンから開く）</span>
   <span><b>管理者</b>　[氏名・連絡先]</span>
   <span><b>台帳の担当者</b>　[氏名・連絡先]</span>
-  <span class="note">紙の記録はこれまでどおり保管。台帳に入れれば経歴簿にまとまる。</span>
+  <span class="note">これまでの紙の記録も保管。台帳に入れれば経歴簿にまとまる。開発：宮古島市消防本部 潜水隊</span>
 </footer>
 </div>
 </body>
