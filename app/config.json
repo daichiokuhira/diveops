@@ -1,3 +1,8 @@
 {
-  "apiBase": "https://diveops-api.miyako-dive.workers.dev"
+  "apiBase": "https://diveops-api.miyako-dive.workers.dev",
+  "org": "宮古島市消防本部",
+  "unit": "潜水隊",
+  "emblemTop": "MIYAKOJIMA FIRE",
+  "emblemBottom": "DIVE RESCUE",
+  "contact": ""
 }

@@ -55,7 +55,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch()
         ca, A = await device(b, 'A')
-        ex('最初はログイン画面', await A.locator('#li-id').count(), 1)
+        ex('最初はログイン画面（まだ共有停止とは出さない）', [await A.locator('#li-id').count(), await A.locator('[data-sync-badge] >> text=共有停止').count()], [1, 0])
         await A.fill('#li-id', '9001'); await A.fill('#li-pass', 'wrong'); await A.click('[data-act="login"]'); await A.wait_for_timeout(800)
         ex('パスコード違いは入れない', await A.locator('text=職員番号かパスコードが違います').count(), 1)
         await login(A, '9001')

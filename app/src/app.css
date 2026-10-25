@@ -17,12 +17,13 @@
   --fs-xl: 2.5rem;
   --tap: 3rem;
   --r: 6px;
+  --wm: 0.06;              /* 背景の紋章の濃さ（文字の読みやすさを優先して薄く） */
 }
 /* 暗い表示：紺地に白い文字、主ボタンは黄に紺の文字 */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; --wm: 0.08; color-scheme: dark; }
 }
-:root[data-theme="dark"] { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; color-scheme: dark; }
+:root[data-theme="dark"] { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; --wm: 0.08; color-scheme: dark; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -174,3 +175,17 @@ table.t tr.on td:first-child { background: linear-gradient(transparent 62%, var(
 .qual-row .link { min-height: var(--tap); text-align: left; }
 .sync-badge { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
 .bar-in [data-sync-badge] { flex: none; }
+
+/* ---- 紋章（背景の透かし・見出し・ログイン・このアプリについて） ---- */
+.wm { position: fixed; inset: 0; z-index: 0; display: grid; place-items: center; pointer-events: none; color: var(--ink); opacity: var(--wm); }
+.wm .emblem { width: min(92vw, 34rem); height: auto; }
+#app { position: relative; z-index: 1; }
+.bar-logo { flex: none; display: inline-flex; width: 2.25rem; height: 2.25rem; color: var(--ink); }
+.bar-logo .emblem { width: 100%; height: 100%; }
+.hero { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; text-align: center; padding-top: 0.5rem; }
+.hero .emblem { width: min(56vw, 13rem); height: auto; color: var(--ink); }
+.hero-title { font-size: var(--fs-l); font-weight: 700; letter-spacing: 0.04em; }
+.hero-org { font-size: var(--fs-s); padding-bottom: 0.25rem; background: linear-gradient(transparent 80%, var(--accent) 80%); display: inline-block; }
+.about-head { display: flex; align-items: center; gap: 1rem; }
+.about-head > .emblem { flex: none; width: 4.5rem; height: 4.5rem; color: var(--ink); }
+@media print { .wm { display: none; } }

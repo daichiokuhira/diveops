@@ -8,13 +8,17 @@ css = (src/'app.css').read_text()
 # 共有 API の場所（app/config.json。無ければ共有しない）。環境変数 DIVEOPS_API_BASE で上書きできる（試験用）
 import os
 cfg = ROOT/'app'/'config.json'
-API_BASE = os.environ.get('DIVEOPS_API_BASE', json.loads(cfg.read_text()).get('apiBase', '') if cfg.exists() else '')
+CFG = json.loads(cfg.read_text()) if cfg.exists() else {}
+API_BASE = os.environ.get('DIVEOPS_API_BASE', CFG.get('apiBase', ''))
+# 使う本部の名前と紋章の文字（ほかの消防本部が使うときは config.json を替える）
+ORG = {k: CFG[k] for k in ('org', 'unit', 'emblemTop', 'emblemBottom', 'contact') if k in CFG}
 import re as _re
 schema = _re.sub(r'(?m)^export ', '', (ROOT/'server'/'src'/'schema.js').read_text())  # サーバーと同じ文書の形
-js = (src/'icons.js').read_text() + '\n' + schema + '\n' + (src/'engine.js').read_text() + '\n' + (src/'app.js').read_text().replace('__APP_VERSION__', VERSION).replace("'__API_BASE__'.startsWith('__') ? '' : '__API_BASE__'", json.dumps(API_BASE))
+js = (src/'icons.js').read_text() + '\n' + (src/'emblem.js').read_text() + '\n' + schema + '\n' + (src/'engine.js').read_text() + '\n' + (src/'app.js').read_text().replace('__APP_VERSION__', VERSION).replace("'__API_BASE__'.startsWith('__') ? '' : '__API_BASE__'", json.dumps(API_BASE)).replace('/*__ORG__*/{}', json.dumps(ORG, ensure_ascii=False))
 table = json.dumps(json.loads((tables/'naui-2022.json').read_text()), ensure_ascii=False)
 build = VERSION
-body = f'''<div id="app"></div>
+body = f'''<div class="wm" aria-hidden="true"></div>
+<div id="app"></div>
 <div id="sheet" hidden></div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <noscript>このアプリを使うにはJavaScriptを有効にしてください。</noscript>
@@ -53,7 +57,9 @@ preview = f'''{head_common}
 {body}
 '''
 (dist/'index.html').write_text(full)
-shutil.copy(src/'manifest.webmanifest', dist/'manifest.webmanifest')
+man = json.loads((src/'manifest.webmanifest').read_text())
+man['description'] = f"{ORG.get('org', '')} {ORG.get('unit', '潜水隊')}の現場記録アプリ（開発：宮古島市消防本部 潜水隊）".strip()
+(dist/'manifest.webmanifest').write_text(json.dumps(man, ensure_ascii=False, indent=2))
 (dist/'sw.js').write_text((src/'sw.js').read_text().replace('__BUILD__', build))
 (dist/'潜水表_NAUI2022.json').write_text(json.dumps(json.loads((tables/'naui-2022.json').read_text()), ensure_ascii=False, indent=1))
 (ROOT/'app'/'preview').mkdir(exist_ok=True)

@@ -32,12 +32,13 @@
   --fs-xl: 2.5rem;
   --tap: 3rem;
   --r: 6px;
+  --wm: 0.06;              /* 背景の紋章の濃さ（文字の読みやすさを優先して薄く） */
 }
 /* 暗い表示：紺地に白い文字、主ボタンは黄に紺の文字 */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; --wm: 0.08; color-scheme: dark; }
 }
-:root[data-theme="dark"] { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; color-scheme: dark; }
+:root[data-theme="dark"] { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; --wm: 0.08; color-scheme: dark; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -190,9 +191,24 @@ table.t tr.on td:first-child { background: linear-gradient(transparent 62%, var(
 .sync-badge { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
 .bar-in [data-sync-badge] { flex: none; }
 
+/* ---- 紋章（背景の透かし・見出し・ログイン・このアプリについて） ---- */
+.wm { position: fixed; inset: 0; z-index: 0; display: grid; place-items: center; pointer-events: none; color: var(--ink); opacity: var(--wm); }
+.wm .emblem { width: min(92vw, 34rem); height: auto; }
+#app { position: relative; z-index: 1; }
+.bar-logo { flex: none; display: inline-flex; width: 2.25rem; height: 2.25rem; color: var(--ink); }
+.bar-logo .emblem { width: 100%; height: 100%; }
+.hero { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; text-align: center; padding-top: 0.5rem; }
+.hero .emblem { width: min(56vw, 13rem); height: auto; color: var(--ink); }
+.hero-title { font-size: var(--fs-l); font-weight: 700; letter-spacing: 0.04em; }
+.hero-org { font-size: var(--fs-s); padding-bottom: 0.25rem; background: linear-gradient(transparent 80%, var(--accent) 80%); display: inline-block; }
+.about-head { display: flex; align-items: center; gap: 1rem; }
+.about-head > .emblem { flex: none; width: 4.5rem; height: 4.5rem; color: var(--ink); }
+@media print { .wm { display: none; } }
+
 </style>
 </head>
 <body>
+<div class="wm" aria-hidden="true"></div>
 <div id="app"></div>
 <div id="sheet" hidden></div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -200,6 +216,38 @@ table.t tr.on td:first-child { background: linear-gradient(transparent 62%, var(
 <script id="builtin-table" type="application/json">{"format": "dive-table/1", "name": "NAUI ダイブテーブル", "version": "2022年版", "verified": true, "verifiedBy": "潜水隊（2名で現物と照合）", "updatedAt": "2026-10-24", "source": "NAUI ダイブテーブル（日本語版カード、©2022 NAUI）の写真から書き起こし。", "notes": ["2026年10月24日、隊内2名で現物カードと1マスずつ照合済み。", "6mより浅い潜水は6mとして計算します。", "30mを超える反復潜水は避けるよう表に記載があります。"], "rules": {"minSurfaceInterval": 10, "clearAfterMinutes": 1440, "avoidRepetitiveDeeperThan": 30, "safetyStopDepth": 5, "safetyStopMinutes": 3, "maxAscentRate": 9}, "depths": [6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 40], "mdt": {"6": 461, "9": 223, "12": 130, "15": 75, "18": 50, "21": 40, "24": 30, "27": 25, "30": 20, "33": 15, "36": 12, "40": 8}, "groups": {"6": [[26, "A"], [43, "B"], [61, "C"], [82, "D"], [106, "E"], [133, "F"], [165, "G"], [205, "H"], [256, "I"], [330, "J"], [461, "K"]], "9": [[17, "A"], [27, "B"], [38, "C"], [50, "D"], [62, "E"], [76, "F"], [91, "G"], [107, "H"], [125, "I"], [145, "J"], [167, "K"], [193, "L"], [223, "M"], [260, "N"]], "12": [[12, "A"], [20, "B"], [27, "C"], [36, "D"], [44, "E"], [53, "F"], [63, "G"], [73, "H"], [84, "I"], [95, "J"], [108, "K"], [121, "L"], [130, "M"], [140, "N"]], "15": [[9, "A"], [15, "B"], [21, "C"], [28, "D"], [34, "E"], [41, "F"], [48, "G"], [56, "H"], [63, "I"], [71, "J"], [75, "K"], [80, "M"]], "18": [[7, "A"], [12, "B"], [17, "C"], [22, "D"], [28, "E"], [33, "F"], [39, "G"], [45, "H"], [50, "I"], [55, "L"]], "21": [[6, "A"], [10, "B"], [14, "C"], [19, "D"], [23, "E"], [28, "F"], [32, "G"], [37, "H"], [40, "I"], [48, "K"]], "24": [[5, "A"], [9, "B"], [12, "C"], [16, "D"], [20, "E"], [24, "F"], [28, "G"], [30, "H"], [35, "J"]], "27": [[4, "A"], [7, "B"], [11, "C"], [14, "D"], [17, "E"], [21, "F"], [24, "G"], [25, "H"], [30, "J"]], "30": [[4, "A"], [6, "B"], [9, "C"], [12, "D"], [15, "E"], [18, "F"], [20, "G"], [25, "J"]], "33": [[3, "A"], [6, "B"], [8, "C"], [11, "D"], [14, "E"], [15, "F"], [20, "I"]], "36": [[3, "A"], [5, "B"], [7, "C"], [10, "D"], [12, "E"], [15, "H"]], "40": [[2, "A"], [4, "B"], [6, "C"], [8, "D"], [10, "G"]]}, "rnt": {"A": {"6": 27, "9": 18, "12": 13, "15": 11, "18": 9, "21": 8, "24": 7, "27": 6, "30": 5, "33": 5, "36": 5, "40": 4}, "B": {"6": 44, "9": 28, "12": 21, "15": 17, "18": 14, "21": 12, "24": 10, "27": 9, "30": 8, "33": 8, "36": 7, "40": 6}, "C": {"6": 62, "9": 39, "12": 29, "15": 23, "18": 19, "21": 16, "24": 14, "27": 12, "30": 11, "33": 10, "36": 9, "40": 8}, "D": {"6": 83, "9": 51, "12": 37, "15": 29, "18": 24, "21": 20, "24": 18, "27": 16, "30": 14, "33": 13, "36": 12}, "E": {"6": 106, "9": 63, "12": 45, "15": 35, "18": 29, "21": 25, "24": 22, "27": 19, "30": 17, "33": 15}, "F": {"6": 134, "9": 77, "12": 55, "15": 42, "18": 35, "21": 29, "24": 25, "27": 22, "30": 20}, "G": {"6": 166, "9": 92, "12": 64, "15": 49, "18": 40, "21": 34, "24": 29, "27": 25}, "H": {"6": 206, "9": 108, "12": 74, "15": 57, "18": 46, "21": 39, "24": 30}, "I": {"6": 257, "9": 126, "12": 85, "15": 65, "18": 50, "21": 40}, "J": {"6": 331, "9": 146, "12": 97, "15": 73}, "K": {"6": 461, "9": 168, "12": 109, "15": 75}, "L": {"9": 194, "12": 122}, "M": {"9": 223, "12": 130}}, "amdt": {"A": {"6": 434, "9": 205, "12": 117, "15": 64, "18": 41, "21": 32, "24": 23, "27": 19, "30": 15, "33": 10, "36": 7, "40": 4}, "B": {"6": 417, "9": 195, "12": 109, "15": 58, "18": 36, "21": 28, "24": 20, "27": 16, "30": 12, "33": 7, "36": 5, "40": 2}, "C": {"6": 399, "9": 184, "12": 101, "15": 52, "18": 31, "21": 24, "24": 16, "27": 13, "30": 9, "33": 5, "36": 3, "40": 0}, "D": {"6": 378, "9": 172, "12": 93, "15": 46, "18": 26, "21": 20, "24": 12, "27": 9, "30": 6, "33": 2, "36": 0}, "E": {"6": 355, "9": 160, "12": 85, "15": 40, "18": 21, "21": 15, "24": 8, "27": 6, "30": 3, "33": 0}, "F": {"6": 327, "9": 146, "12": 75, "15": 33, "18": 15, "21": 11, "24": 5, "27": 3, "30": 0}, "G": {"6": 295, "9": 131, "12": 66, "15": 26, "18": 10, "21": 6, "24": 1, "27": 0}, "H": {"6": 255, "9": 115, "12": 56, "15": 18, "18": 4, "21": 1, "24": 0}, "I": {"6": 204, "9": 97, "12": 45, "15": 10, "18": 0, "21": 0}, "J": {"6": 130, "9": 77, "12": 33, "15": 2}, "K": {"6": 0, "9": 55, "12": 21, "15": 0}, "L": {"9": 29, "12": 8}, "M": {"9": 0, "12": 0}}, "surfaceInterval": {"A": [[10, 1440, "A"]], "B": [[10, 76, "B"], [77, 1440, "A"]], "C": [[10, 55, "C"], [56, 131, "B"], [132, 1440, "A"]], "D": [[10, 52, "D"], [53, 107, "C"], [108, 183, "B"], [184, 1440, "A"]], "E": [[10, 52, "E"], [53, 104, "D"], [105, 159, "C"], [160, 235, "B"], [236, 1440, "A"]], "F": [[10, 52, "F"], [53, 104, "E"], [105, 157, "D"], [158, 211, "C"], [212, 288, "B"], [289, 1440, "A"]], "G": [[10, 52, "G"], [53, 104, "F"], [105, 157, "E"], [158, 209, "D"], [210, 263, "C"], [264, 340, "B"], [341, 1440, "A"]], "H": [[10, 52, "H"], [53, 104, "G"], [105, 157, "F"], [158, 209, "E"], [210, 261, "D"], [262, 316, "C"], [317, 392, "B"], [393, 1440, "A"]], "I": [[10, 52, "I"], [53, 104, "H"], [105, 157, "G"], [158, 209, "F"], [210, 261, "E"], [262, 313, "D"], [314, 368, "C"], [369, 444, "B"], [445, 1440, "A"]], "J": [[10, 52, "J"], [53, 104, "I"], [105, 157, "H"], [158, 209, "G"], [210, 261, "F"], [262, 313, "E"], [314, 366, "D"], [367, 420, "C"], [421, 496, "B"], [497, 1440, "A"]], "K": [[10, 52, "K"], [53, 104, "J"], [105, 157, "I"], [158, 209, "H"], [210, 261, "G"], [262, 313, "F"], [314, 366, "E"], [367, 418, "D"], [419, 472, "C"], [473, 549, "B"], [550, 1440, "A"]], "L": [[10, 52, "L"], [53, 104, "K"], [105, 157, "J"], [158, 209, "I"], [210, 261, "H"], [262, 313, "G"], [314, 366, "F"], [367, 418, "E"], [419, 470, "D"], [471, 524, "C"], [525, 601, "B"], [602, 1440, "A"]], "M": [[10, 52, "M"], [53, 104, "L"], [105, 157, "K"], [158, 209, "J"], [210, 261, "I"], [262, 313, "H"], [314, 366, "G"], [367, 418, "F"], [419, 470, "E"], [471, 522, "D"], [523, 577, "C"], [578, 653, "B"], [654, 1440, "A"]], "N": [[10, 52, "N"], [53, 104, "M"], [105, 157, "L"], [158, 209, "K"], [210, 261, "J"], [262, 313, "I"], [314, 366, "H"], [367, 418, "G"], [419, 470, "F"], [471, 522, "E"], [523, 574, "D"], [575, 629, "C"], [630, 705, "B"], [706, 1440, "A"]]}, "deco": {"9-N": {"limit": 260, "stop5": 5}, "12-N": {"limit": 140, "stop5": 6}, "15-M": {"limit": 80, "stop5": 2}, "18-L": {"limit": 55, "stop5": 2}, "21-K": {"limit": 48, "stop5": 2}, "24-J": {"limit": 35, "stop5": 1}, "27-J": {"limit": 30, "stop5": 5}, "30-J": {"limit": 25, "stop5": 5}, "33-I": {"limit": 20, "stop5": 5}, "36-H": {"limit": 15, "stop5": 5}, "40-G": {"limit": 10, "stop5": 5}}}</script>
 <script>
 const ICONS = {"plus": "<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />", "arrow-down-to-line": "<path d=\"M12 17V3\" /> <path d=\"m6 11 6 6 6-6\" /> <path d=\"M19 21H5\" />", "arrow-up-from-line": "<path d=\"m18 9-6-6-6 6\" /> <path d=\"M12 3v14\" /> <path d=\"M5 21h14\" />", "timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /> <line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /> <circle cx=\"12\" cy=\"14\" r=\"8\" />", "users": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /> <circle cx=\"9\" cy=\"7\" r=\"4\" /> <path d=\"M22 21v-2a4 4 0 0 0-3-3.87\" /> <path d=\"M16 3.13a4 4 0 0 1 0 7.75\" />", "user-plus": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /> <circle cx=\"9\" cy=\"7\" r=\"4\" /> <line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\" /> <line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\" />", "waves": "<path d=\"M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" /> <path d=\"M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" /> <path d=\"M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\" />", "share-2": "<circle cx=\"18\" cy=\"5\" r=\"3\" /> <circle cx=\"6\" cy=\"12\" r=\"3\" /> <circle cx=\"18\" cy=\"19\" r=\"3\" /> <line x1=\"8.59\" x2=\"15.42\" y1=\"13.51\" y2=\"17.49\" /> <line x1=\"15.41\" x2=\"8.59\" y1=\"6.51\" y2=\"10.49\" />", "download": "<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" /> <polyline points=\"7 10 12 15 17 10\" /> <line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\" />", "upload": "<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" /> <polyline points=\"17 8 12 3 7 8\" /> <line x1=\"12\" x2=\"12\" y1=\"3\" y2=\"15\" />", "undo-2": "<path d=\"M9 14 4 9l5-5\" /> <path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" />", "settings": "<path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />", "table-2": "<path d=\"M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18\" />", "chevron-left": "<path d=\"m15 18-6-6 6-6\" />", "chevron-right": "<path d=\"m9 18 6-6-6-6\" />", "check": "<path d=\"M20 6 9 17l-5-5\" />", "triangle-alert": "<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /> <path d=\"M12 9v4\" /> <path d=\"M12 17h.01\" />", "x": "<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />", "trash-2": "<path d=\"M3 6h18\" /> <path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /> <path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /> <line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /> <line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />", "file-text": "<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\" /> <path d=\"M14 2v4a2 2 0 0 0 2 2h4\" /> <path d=\"M10 9H8\" /> <path d=\"M16 13H8\" /> <path d=\"M16 17H8\" />", "calculator": "<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" /> <line x1=\"8\" x2=\"16\" y1=\"6\" y2=\"6\" /> <line x1=\"16\" x2=\"16\" y1=\"14\" y2=\"18\" /> <path d=\"M16 10h.01\" /> <path d=\"M12 10h.01\" /> <path d=\"M8 10h.01\" /> <path d=\"M12 14h.01\" /> <path d=\"M8 14h.01\" /> <path d=\"M12 18h.01\" /> <path d=\"M8 18h.01\" />", "clock": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <polyline points=\"12 6 12 12 16 14\" />", "pencil": "<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /> <path d=\"m15 5 4 4\" />", "rotate-ccw": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" />", "flag": "<path d=\"M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z\" /> <line x1=\"4\" x2=\"4\" y1=\"22\" y2=\"15\" />", "info": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"M12 16v-4\" /> <path d=\"M12 8h.01\" />", "copy": "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /> <path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />", "circle-check": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"m9 12 2 2 4-4\" />", "circle-alert": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <line x1=\"12\" x2=\"12\" y1=\"8\" y2=\"12\" /> <line x1=\"12\" x2=\"12.01\" y1=\"16\" y2=\"16\" />", "play": "<polygon points=\"6 3 20 12 6 21 6 3\" />", "list": "<path d=\"M3 12h.01\" /> <path d=\"M3 18h.01\" /> <path d=\"M3 6h.01\" /> <path d=\"M8 12h13\" /> <path d=\"M8 18h13\" /> <path d=\"M8 6h13\" />", "moon": "<path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\" />", "sun": "<circle cx=\"12\" cy=\"12\" r=\"4\" /> <path d=\"M12 2v2\" /> <path d=\"M12 20v2\" /> <path d=\"m4.93 4.93 1.41 1.41\" /> <path d=\"m17.66 17.66 1.41 1.41\" /> <path d=\"M2 12h2\" /> <path d=\"M20 12h2\" /> <path d=\"m6.34 17.66-1.41 1.41\" /> <path d=\"m19.07 4.93-1.41 1.41\" />", "ellipsis": "<circle cx=\"12\" cy=\"12\" r=\"1\" /> <circle cx=\"19\" cy=\"12\" r=\"1\" /> <circle cx=\"5\" cy=\"12\" r=\"1\" />", "anchor": "<path d=\"M12 22V8\" /> <path d=\"M5 12H2a10 10 0 0 0 20 0h-3\" /> <circle cx=\"12\" cy=\"5\" r=\"3\" />", "mail": "<rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\" /> <path d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\" />", "shield-check": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" /> <path d=\"m9 12 2 2 4-4\" />", "arrow-up": "<path d=\"m5 12 7-7 7 7\" /> <path d=\"M12 19V5\" />", "hard-drive-download": "<path d=\"M12 2v8\" /> <path d=\"m16 6-4 4-4-4\" /> <rect width=\"20\" height=\"8\" x=\"2\" y=\"14\" rx=\"2\" /> <path d=\"M6 18h.01\" /> <path d=\"M10 18h.01\" />", "send": "<path d=\"M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z\" /> <path d=\"m21.854 2.147-10.94 10.939\" />", "history": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" /> <path d=\"M12 7v5l4 2\" />", "cloud": "<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />", "cloud-off": "<path d=\"m2 2 20 20\" /> <path d=\"M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193\" /> <path d=\"M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07\" />", "key-round": "<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\" /> <circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\" />", "log-out": "<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\" /> <polyline points=\"16 17 21 12 16 7\" /> <line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\" />", "refresh-cw": "<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" /> <path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\" /> <path d=\"M8 16H3v5\" />"};
+
+/* ---------- 紋章（消防の十字に、潜水の旗と波）。このアプリのために描いたもの ----------
+   上の腕は 119、左右は はしご と 炎、下の腕は DIVE。輪の文字は app/config.json の emblemTop / emblemBottom。
+   line：線の色、paper：塗りの色（下地と同じにすると線だけに見える）、ring：輪の線の色、disc：輪の中の色 */
+function emblem(o = {}) {
+  const line = o.line || 'currentColor', paper = o.paper || 'var(--bg)', ring = o.ring || line, disc = o.disc || paper;
+  const arm = 'M-72 -72 Q-74 -150 -156 -218 Q0 -170 156 -218 Q74 -150 72 -72 Z';
+  const arms = [0, 90, 180, 270].map(r => `<path d="${arm}" transform="rotate(${r})"/>`).join('');
+  const t = o.text === false ? null : { top: o.top || '', bottom: o.bottom || '' };
+  const font = `font-family="'Arial Black','Helvetica Neue',Arial,sans-serif" font-weight="900" fill="${line}" stroke="none"`;
+  const uid = 'em' + Math.random().toString(36).slice(2, 8);
+  const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  return `<svg class="emblem" viewBox="-256 -256 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <g fill="${paper}" stroke="${line}" stroke-width="22" stroke-linejoin="round">${arms}</g>
+  <g fill="none" stroke="${paper}" stroke-width="8" stroke-linejoin="round">${arms}</g>
+  ${t ? `<text x="0" y="-150" text-anchor="middle" font-size="46" ${font}>119</text>
+  <text x="0" y="186" text-anchor="middle" font-size="40" ${font}>DIVE</text>
+  <g transform="translate(-166 0) rotate(-90)" fill="none" stroke="${line}" stroke-width="7" stroke-linecap="round"><path d="M-34 -14 H34 M-34 14 H34 M-22 -14 V14 M-4 -14 V14 M14 -14 V14 M32 -14 V14"/></g>
+  <g transform="translate(166 0)" fill="${line}" stroke="none"><path d="M0 -40 C14 -22 30 -10 26 12 C23 30 10 38 0 38 C-10 38 -24 30 -26 12 C-28 -4 -16 -12 -10 -26 C-6 -14 -2 -8 4 -6 C6 -18 2 -28 0 -40 Z"/></g>` : ''}
+  <circle r="118" fill="${disc}" stroke="${ring}" stroke-width="12"/>
+  <circle r="80" fill="none" stroke="${line}" stroke-width="5"/>
+  ${t ? `<defs><path id="${uid}a" d="M-92 0 A92 92 0 0 1 92 0"/><path id="${uid}b" d="M-108 0 A108 108 0 0 0 108 0"/></defs>
+  <text font-size="22" letter-spacing="2" text-anchor="middle" ${font}><textPath href="#${uid}a" startOffset="50%">${esc(t.top)}</textPath></text>
+  <text font-size="22" letter-spacing="2" text-anchor="middle" ${font}><textPath href="#${uid}b" startOffset="50%">${esc(t.bottom)}</textPath></text>
+  <circle cx="-99" cy="0" r="5" fill="${line}" stroke="none"/><circle cx="99" cy="0" r="5" fill="${line}" stroke="none"/>` : ''}
+  <g stroke="${line}" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="-46" y="-44" width="92" height="62" fill="none"/>
+    <path d="M-46 -44 L-46 -28 L30 18 L46 18 L46 2 L-30 -44 Z" fill="${line}" stroke-width="3"/>
+    <path d="M-50 44 q12.5 -11 25 0 t25 0 t25 0 t25 0" fill="none"/>
+  </g>
+</svg>`;
+}
 
 /* 共有する文書の形（サーバーとアプリで同じものを使う。アプリには build.py が export を外して入れる）
  * 決めた欄だけを、決めた型・長さ・範囲で残し、それ以外は捨てる。必須の欄が無い・壊れているときは null（受け付けない）。
@@ -620,6 +668,10 @@ const LS_KEY = 'diveops.v1';
 const APP_VERSION = '0.5.0';
 // 共有 API の場所（app/config.json の apiBase。空なら共有しない＝この端末だけで使う）
 const API_BASE = "https://diveops-api.miyako-dive.workers.dev";
+// 使う本部（app/config.json）。ほかの消防本部が使うときは、ここが替わる。開発元の表示は替えない
+const ORG = Object.assign({ org: '', unit: '潜水隊', emblemTop: 'FIRE DEPT.', emblemBottom: 'DIVE RESCUE', contact: '' }, {"org": "宮古島市消防本部", "unit": "潜水隊", "emblemTop": "MIYAKOJIMA FIRE", "emblemBottom": "DIVE RESCUE", "contact": ""});
+const ORG_NAME = `${ORG.org} ${ORG.unit}`.trim();
+const DEVELOPER = '宮古島市消防本部 潜水隊';
 const TZ = 'Asia/Tokyo';
 const TYPES = ['災害', '訓練', '研修', 'その他'];
 
@@ -874,9 +926,11 @@ function toast(msg, undo = false) {
 }
 
 /* ---------- 描画 ---------- */
+let logoSvg = '';
 function bar(title, sub, back, right = '') {
+  logoSvg = logoSvg || emblem({ text: false });
   return `<header class="bar"><div class="bar-in">
-    ${back ? `<button class="btn btn-icon" data-act="back" aria-label="戻る">${ic('chevron-left')}</button>` : ''}
+    ${back ? `<button class="btn btn-icon" data-act="back" aria-label="戻る">${ic('chevron-left')}</button>` : `<span class="bar-logo">${logoSvg}</span>`}
     <div class="bar-title">${title}${sub ? `<span class="bar-sub">${sub}</span>` : ''}</div>${CLOUD ? `<span data-sync-badge>${syncBadge()}</span>` : ''}${right}</div></header>${globalAlerts()}`;
 }
 let updateReady = false;
@@ -900,6 +954,8 @@ function render() {
     tables: viewTables, settings: viewSettings, calc: viewCalc, records: viewRecords
   }[view.name] || viewHome);
   app.innerHTML = v();
+  const wm = $('.wm');
+  if (wm && !wm.firstChild) wm.innerHTML = emblem({ top: ORG.emblemTop, bottom: ORG.emblemBottom });
   renderSheet();
   tick();
   if (view.name === 'board') keepAwake(); else releaseAwake();
@@ -940,7 +996,7 @@ function viewHome() {
   const past = S.incidents.filter(i => !live(i)).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   const t = activeTable();
   const hasSample = S.members.some(m => m.sample) || S.incidents.some(i => i.sample);
-  return `${bar('潜水現場記録', '宮古島市消防本部 潜水隊', false, `<button class="btn btn-icon" data-act="go" data-to="settings" aria-label="設定">${ic('settings')}</button>`)}
+  return `${bar('潜水現場記録', esc(ORG_NAME), false, `<button class="btn btn-icon" data-act="go" data-to="settings" aria-label="設定">${ic('settings')}</button>`)}
   <main class="wrap">
     ${backupHint()}
     ${active.length ? `<section class="stack"><h2>進行中</h2><div class="list">${active.map(incRow).join('')}</div></section>` : ''}
@@ -1553,7 +1609,7 @@ async function buildWorkbook(ids, range) {
   const used = new Set();
   // シート名：Excel で使えない文字と ' を除き、大文字小文字を区別せずに重複を避ける
   const sheetName = base => { base = base.replace(/[\\/?*[\]:']/g, '').slice(0, 28) || '隊員'; let n = base, k = 2; while (used.has(n.toLowerCase())) n = `${base.slice(0, 26)}${k++}`; used.add(n.toLowerCase()); return n; };
-  const foot = `&L潜水現場記録 v${APP_VERSION}&C&P / &N&R計算の目安。このスマホの記録のみ・正本は署の台帳`;
+  const foot = `&L潜水現場記録 v${APP_VERSION}&C&P / &N&R計算の目安。${CLOUD ? '共有の記録' : 'このスマホの記録のみ'}・正本は署の台帳`;
   const fit = (ws, landscape) => {
     ws.pageSetup = { paperSize: 9, orientation: landscape ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, blackAndWhite: true, margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.25, footer: 0.25 } };
     ws.headerFooter = { oddHeader: `&R出力 ${today} ${hm(now)}`, oddFooter: foot };
@@ -1902,7 +1958,12 @@ function viewSettings() {
       <label class="field"><span>確認のため「削除」と入力</span><input class="input" id="wipe" value="${esc(confirmWipe)}" autocomplete="off"></label>
       <button class="btn" data-act="wipe" ${confirmWipe === '削除' ? '' : 'disabled'}>${ic('trash-2')}すべて消す</button>
     </section>
-    <p class="small">潜水現場記録 v${APP_VERSION}・潜水表 ${esc(tableLabel(activeTable()))}</p>
+    <section class="stack about"><h2>このアプリについて</h2>
+      <div class="about-head">${emblem({ top: ORG.emblemTop, bottom: ORG.emblemBottom })}<div><b>潜水現場記録</b><br><span class="small">v${APP_VERSION}・潜水表 ${esc(tableLabel(activeTable()))}<br>${esc(ORG_NAME)}</span></div></div>
+      <p class="small">紙で残してきた潜水の記録を、現場のスマホで残し、隊の全員で共有するために、${esc(DEVELOPER)}が作りました。潜降・浮上の記録、NAUI潜水表による上限の目安、経歴簿のExcel出力、署の潜水管理台帳への取り込みまでを1つにしています。</p>
+      <p class="small"><b>ほかの消防本部でも使えます。</b>本部名・隊名・潜水表・共有の保存先を入れ替えるだけで、同じ仕組みを導入できます（Cloudflare と GitHub の無料の枠で動きます）。導入の相談は、${esc(DEVELOPER)}へ${ORG.contact ? `（${esc(ORG.contact)}）` : ''}。</p>
+      <p class="small">開発：${esc(DEVELOPER)}</p>
+    </section>
   </main>`;
 }
 
@@ -2545,7 +2606,7 @@ async function syncNow() {
   return syncing;
 }
 function syncBadge() {
-  if (!CLOUD) return '';
+  if (!CLOUD || !everIn()) return '';  // まだ一度もログインしていない端末には出さない
   if (!signedIn()) return `<span class="sync-badge">${ic('circle-alert')}共有停止</span>`;
   const n = pendingCount();
   if (syncNote === 'offline' || navigator.onLine === false) return `<span class="sync-badge">${ic('cloud-off')}${n ? '未送信' : '電波なし'}</span>`;
@@ -2573,8 +2634,12 @@ setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 30
 /* ----- ログイン ----- */
 let loginMsg = '', loginId = '';
 function viewLogin() {
-  return `${bar('潜水現場記録', '宮古島市消防本部 潜水隊', false)}
+  return `${bar('潜水現場記録', esc(ORG_NAME), false)}
   <main class="wrap">
+    <section class="hero">
+      ${emblem({ top: ORG.emblemTop, bottom: ORG.emblemBottom })}
+      <div><p class="hero-title">潜水現場記録</p><p class="hero-org">${esc(ORG_NAME)}</p></div>
+    </section>
     <section class="stack">
       <h1><span class="u">ログイン</span></h1>
       <p class="small">記録は隊の全員で共有します。自分の職員番号と、隊のパスコードを入れてください。</p>

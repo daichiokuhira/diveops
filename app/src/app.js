@@ -7,6 +7,10 @@ const LS_KEY = 'diveops.v1';
 const APP_VERSION = '__APP_VERSION__';
 // 共有 API の場所（app/config.json の apiBase。空なら共有しない＝この端末だけで使う）
 const API_BASE = '__API_BASE__'.startsWith('__') ? '' : '__API_BASE__';
+// 使う本部（app/config.json）。ほかの消防本部が使うときは、ここが替わる。開発元の表示は替えない
+const ORG = Object.assign({ org: '', unit: '潜水隊', emblemTop: 'FIRE DEPT.', emblemBottom: 'DIVE RESCUE', contact: '' }, /*__ORG__*/{});
+const ORG_NAME = `${ORG.org} ${ORG.unit}`.trim();
+const DEVELOPER = '宮古島市消防本部 潜水隊';
 const TZ = 'Asia/Tokyo';
 const TYPES = ['災害', '訓練', '研修', 'その他'];
 
@@ -261,9 +265,11 @@ function toast(msg, undo = false) {
 }
 
 /* ---------- 描画 ---------- */
+let logoSvg = '';
 function bar(title, sub, back, right = '') {
+  logoSvg = logoSvg || emblem({ text: false });
   return `<header class="bar"><div class="bar-in">
-    ${back ? `<button class="btn btn-icon" data-act="back" aria-label="戻る">${ic('chevron-left')}</button>` : ''}
+    ${back ? `<button class="btn btn-icon" data-act="back" aria-label="戻る">${ic('chevron-left')}</button>` : `<span class="bar-logo">${logoSvg}</span>`}
     <div class="bar-title">${title}${sub ? `<span class="bar-sub">${sub}</span>` : ''}</div>${CLOUD ? `<span data-sync-badge>${syncBadge()}</span>` : ''}${right}</div></header>${globalAlerts()}`;
 }
 let updateReady = false;
@@ -287,6 +293,8 @@ function render() {
     tables: viewTables, settings: viewSettings, calc: viewCalc, records: viewRecords
   }[view.name] || viewHome);
   app.innerHTML = v();
+  const wm = $('.wm');
+  if (wm && !wm.firstChild) wm.innerHTML = emblem({ top: ORG.emblemTop, bottom: ORG.emblemBottom });
   renderSheet();
   tick();
   if (view.name === 'board') keepAwake(); else releaseAwake();
@@ -327,7 +335,7 @@ function viewHome() {
   const past = S.incidents.filter(i => !live(i)).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   const t = activeTable();
   const hasSample = S.members.some(m => m.sample) || S.incidents.some(i => i.sample);
-  return `${bar('潜水現場記録', '宮古島市消防本部 潜水隊', false, `<button class="btn btn-icon" data-act="go" data-to="settings" aria-label="設定">${ic('settings')}</button>`)}
+  return `${bar('潜水現場記録', esc(ORG_NAME), false, `<button class="btn btn-icon" data-act="go" data-to="settings" aria-label="設定">${ic('settings')}</button>`)}
   <main class="wrap">
     ${backupHint()}
     ${active.length ? `<section class="stack"><h2>進行中</h2><div class="list">${active.map(incRow).join('')}</div></section>` : ''}
@@ -940,7 +948,7 @@ async function buildWorkbook(ids, range) {
   const used = new Set();
   // シート名：Excel で使えない文字と ' を除き、大文字小文字を区別せずに重複を避ける
   const sheetName = base => { base = base.replace(/[\\/?*[\]:']/g, '').slice(0, 28) || '隊員'; let n = base, k = 2; while (used.has(n.toLowerCase())) n = `${base.slice(0, 26)}${k++}`; used.add(n.toLowerCase()); return n; };
-  const foot = `&L潜水現場記録 v${APP_VERSION}&C&P / &N&R計算の目安。このスマホの記録のみ・正本は署の台帳`;
+  const foot = `&L潜水現場記録 v${APP_VERSION}&C&P / &N&R計算の目安。${CLOUD ? '共有の記録' : 'このスマホの記録のみ'}・正本は署の台帳`;
   const fit = (ws, landscape) => {
     ws.pageSetup = { paperSize: 9, orientation: landscape ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, blackAndWhite: true, margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.25, footer: 0.25 } };
     ws.headerFooter = { oddHeader: `&R出力 ${today} ${hm(now)}`, oddFooter: foot };
@@ -1289,7 +1297,12 @@ function viewSettings() {
       <label class="field"><span>確認のため「削除」と入力</span><input class="input" id="wipe" value="${esc(confirmWipe)}" autocomplete="off"></label>
       <button class="btn" data-act="wipe" ${confirmWipe === '削除' ? '' : 'disabled'}>${ic('trash-2')}すべて消す</button>
     </section>
-    <p class="small">潜水現場記録 v${APP_VERSION}・潜水表 ${esc(tableLabel(activeTable()))}</p>
+    <section class="stack about"><h2>このアプリについて</h2>
+      <div class="about-head">${emblem({ top: ORG.emblemTop, bottom: ORG.emblemBottom })}<div><b>潜水現場記録</b><br><span class="small">v${APP_VERSION}・潜水表 ${esc(tableLabel(activeTable()))}<br>${esc(ORG_NAME)}</span></div></div>
+      <p class="small">紙で残してきた潜水の記録を、現場のスマホで残し、隊の全員で共有するために、${esc(DEVELOPER)}が作りました。潜降・浮上の記録、NAUI潜水表による上限の目安、経歴簿のExcel出力、署の潜水管理台帳への取り込みまでを1つにしています。</p>
+      <p class="small"><b>ほかの消防本部でも使えます。</b>本部名・隊名・潜水表・共有の保存先を入れ替えるだけで、同じ仕組みを導入できます（Cloudflare と GitHub の無料の枠で動きます）。導入の相談は、${esc(DEVELOPER)}へ${ORG.contact ? `（${esc(ORG.contact)}）` : ''}。</p>
+      <p class="small">開発：${esc(DEVELOPER)}</p>
+    </section>
   </main>`;
 }
 
@@ -1932,7 +1945,7 @@ async function syncNow() {
   return syncing;
 }
 function syncBadge() {
-  if (!CLOUD) return '';
+  if (!CLOUD || !everIn()) return '';  // まだ一度もログインしていない端末には出さない
   if (!signedIn()) return `<span class="sync-badge">${ic('circle-alert')}共有停止</span>`;
   const n = pendingCount();
   if (syncNote === 'offline' || navigator.onLine === false) return `<span class="sync-badge">${ic('cloud-off')}${n ? '未送信' : '電波なし'}</span>`;
@@ -1960,8 +1973,12 @@ setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 30
 /* ----- ログイン ----- */
 let loginMsg = '', loginId = '';
 function viewLogin() {
-  return `${bar('潜水現場記録', '宮古島市消防本部 潜水隊', false)}
+  return `${bar('潜水現場記録', esc(ORG_NAME), false)}
   <main class="wrap">
+    <section class="hero">
+      ${emblem({ top: ORG.emblemTop, bottom: ORG.emblemBottom })}
+      <div><p class="hero-title">潜水現場記録</p><p class="hero-org">${esc(ORG_NAME)}</p></div>
+    </section>
     <section class="stack">
       <h1><span class="u">ログイン</span></h1>
       <p class="small">記録は隊の全員で共有します。自分の職員番号と、隊のパスコードを入れてください。</p>
