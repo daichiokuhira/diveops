@@ -425,6 +425,7 @@ function viewBoard() {
   <main class="wrap">
     ${inc.status !== 'active' ? `<div class="alert soft">${ic('info')}<span>この事案は終了しています。記録の修正はできます。</span></div>` : ''}
     ${CLOUD && (navigator.onLine === false || !signedIn() || !S.sync?.lastPullAt || Date.now() - new Date(S.sync.lastPullAt) > 180000) ? `<div class="alert soft">${ic('cloud-off')}<span>ほかの端末の記録が届いていないかもしれません（最終受信 ${S.sync?.lastPullAt ? hm(S.sync.lastPullAt) : 'なし'}）。1人の潜水員は1台で記録してください。</span></div>` : ''}
+    ${t.snap && t.data.version !== BUILTIN_TABLE.version ? `<div class="alert">${ic('triangle-alert')}<span>この事案は、この端末に無い潜水表（${esc(tableLabel(t))}）で計算しています。正しい表か隊長に確かめてください。</span></div>` : ''}
     ${t.missing ? `<div class="alert">${ic('triangle-alert')}<span>この事案を始めたときの潜水表が見つからないため、使用中の表で計算しています。</span></div>` : ''}
     <section>
       ${inc.divers.length ? `<div class="list">${inc.divers.map(dv => diverRow(inc, dv, dv.memberId)).join('')}</div>`
@@ -754,7 +755,7 @@ function viewSummary() {
         : `<button class="btn" data-act="sheet" data-sheet="editInc">${ic('pencil')}事案の情報を直す</button>`}
     </section>
     <section class="stack"><h2>潜水の記録（${live.length}本）</h2>
-      ${rows.length ? `<div class="list">${rows.map(r => diveLine(r, r.res, r.no - 1, '').replace(/(<div class="item-title[^>]*>)/, `$1${esc(r.name)}　`)).join('')}</div>` : '<p class="small">記録がありません。</p>'}
+      ${rows.length ? `<div class="list">${rows.map(r => diveLine(r, r.res, r.no - 1, '').replace(/(<div class="item-title[^>]*>)/, m => m + esc(r.name) + '　')).join('')}</div>` : '<p class="small">記録がありません。</p>'}
     </section>
     ${active ? `<section class="stack"><h2>1. 終了</h2>
       ${downNow.length ? `<div class="alert">${ic('triangle-alert')}<span>まだ水中の人がいます：${esc(downNow.join('、'))}。浮上を記録してから終了してください。</span></div>` : ''}
@@ -1384,7 +1385,7 @@ document.addEventListener('click', async e => {
     case 'rec-xlsx': readRecDates(); rec.busy = true; render(); try { await exportRecords(); } finally { rec.busy = false; render(); } break;
     case 'back': history.length > 1 ? history.back() : go('home'); break;
     case 'go': if (view.name === 'new') readDraft(); if (el.dataset.to === 'new') draft = null; if (el.dataset.to === 'records') { rec.ids = null; rec.q = ''; } go(el.dataset.to); break;
-    case 'open-inc': { const x = S.incidents.find(i => i.id === el.dataset.id); go(x.status === 'active' && !x.imported ? 'board' : 'summary', { incidentId: x.id }); break; }
+    case 'open-inc': { const x = S.incidents.find(i => i.id === el.dataset.id); go((x.status === 'active' || x.divers.some(d => d.current)) && !x.imported ? 'board' : 'summary', { incidentId: x.id }); break; }
     case 'go-summary': go('summary', { incidentId: inc.id }); break;
     case 'undo': if (undoSnap) { const keepSync = S.sync; S = JSON.parse(undoSnap); if (keepSync) S.sync = keepSync; undoSnap = null; saved(); $('#toast').hidden = true; sheet = null; render(); toast('元に戻しました'); } break;
     case 'sheet-close': closeSheet(); break;
@@ -1751,7 +1752,18 @@ function trackChanges() {
   const s = sy(), now = cloudNow(), cur = docsOf();
   for (const [k, d] of cur) {
     const h = JSON.stringify(d.data);
-    if (s.known[k] !== h) { s.outbox[k] = { ...d, deleted: false, updatedAt: now }; s.known[k] = h; }
+    if (s.known[k] === h) continue;
+    const entry = { ...d, deleted: false, updatedAt: now };
+    // 事案・隊員は、変えた欄だけを新しい方として扱う（ほかの端末が別の欄を直していても消さない）
+    if (MERGE_KINDS.includes(d.kind) && s.known[k]) {
+      let old = {}; try { old = JSON.parse(s.known[k]) || {}; } catch (e) {}
+      const keys = new Set([...Object.keys(old), ...Object.keys(d.data)]);
+      const changed = [...keys].filter(f => JSON.stringify(old[f]) !== JSON.stringify(d.data[f]));
+      const prev = s.outbox[k];
+      entry.fields = [...new Set([...(prev && prev.fields ? prev.fields : []), ...changed])];
+      if (prev && !prev.fields) delete entry.fields; // まだ送っていない新しい文書は丸ごと
+    }
+    s.outbox[k] = entry; s.known[k] = h;
   }
   for (const k of Object.keys(s.known)) if (!cur.has(k)) {
     const [kind, ...rest] = k.split(':');
@@ -1759,6 +1771,7 @@ function trackChanges() {
     delete s.known[k];
   }
 }
+const MERGE_KINDS = ['incident', 'member'];
 const pendingCount = () => Object.keys(S.sync?.outbox || {}).length;
 
 // 受け取った文書を、いまの記録に入れる
@@ -1793,13 +1806,17 @@ function applyDoc(doc) {
   if (!data) return false;
   if (kind === 'incident' && data.tableSnap && Engine.validate(data.tableSnap).errors.length) delete data.tableSnap;
   if (kind === 'member') { const m = memberStub(id); const quals = m.quals || []; Object.keys(m).forEach(k => { if (!['id', 'quals'].includes(k)) delete m[k]; }); Object.assign(m, data, { id, quals }); }
-  if (kind === 'qual') { removeFromAll('qual', id); const m = memberStub(data.memberId); m.quals.push({ ...strip(data, 'memberId'), id }); }
+  if (kind === 'qual') {
+    const m = memberStub(data.memberId), q = { ...strip(data, 'memberId'), id };
+    const i = m.quals.findIndex(x => x.id === id);
+    if (i >= 0) m.quals[i] = q; else { removeFromAll('qual', id); m.quals.push(q); }
+  }
   if (kind === 'incident') { const inc = incStub(id); const divers = inc.divers; Object.keys(inc).forEach(k => { if (!['id', 'divers'].includes(k)) delete inc[k]; }); Object.assign(inc, data, { id, divers }); }
   if (kind === 'diver') { const inc = incStub(data.incidentId); const dv = diverStub(inc, data.memberId); const dives = dv.dives; Object.keys(dv).forEach(k => { if (k !== 'dives') delete dv[k]; }); Object.assign(dv, strip(data, 'incidentId'), { dives }); }
   if (kind === 'dive') {
-    removeFromAll('dive', id);
-    const inc = incStub(data.incidentId), dv = diverStub(inc, data.memberId);
-    dv.dives.push({ ...strip(data, 'incidentId', 'memberId'), id });
+    const inc = incStub(data.incidentId), dv = diverStub(inc, data.memberId), d = { ...strip(data, 'incidentId', 'memberId'), id };
+    const i = dv.dives.findIndex(x => x.id === id);
+    if (i >= 0) dv.dives[i] = d; else dv.dives.push(d);
     dv.dives.sort((a, b) => String(a.startAt).localeCompare(String(b.startAt)));
   }
   return true;
@@ -1815,41 +1832,54 @@ async function syncNow() {
     s.failed ||= {};
     let rounds = 0, changedLocal = false, rejectedMsg = '', lostCount = 0;
     // ログインした直後（fresh）は、先に共有の記録を受け取ってから、この端末にしか無いものを送る
-    let since = s.fresh ? 0 : s.since, refetch = false, refetched = false;
-    const staleKeys = new Set();
+    let since = s.fresh ? 0 : s.since, othersChanged = false;
+    const sentStamp = {}; // 自分が送った変更（戻ってきても「ほかの端末の変更」とは数えない）
     try {
-      while (rounds++ < 40) {
+      while (rounds++ < 200) {
         if (!s.fresh) trackChanges();
-        const sent = s.fresh ? [] : Object.values(s.outbox).slice(0, 400);
+        const sent = s.fresh ? [] : Object.values(s.outbox).slice(0, s.limit || 5);
+        for (const d of sent) sentStamp[keyOf(d.kind, d.id)] = d.updatedAt;
         const t0 = Date.now();
         const res = await fetch(API_BASE + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token }, body: JSON.stringify({ since, changes: sent }) });
         if (res.status === 401) { s.token = null; syncNote = 'login'; save(); if (!sheet) render(); else renderSyncBadge(); toast('共有が止まりました。記録は続けられます。ログインし直すと送ります'); return; }
+        if (res.status === 413) { const e = await res.json().catch(() => ({})); if (e.limit) { s.limit = e.limit; continue; } }
         if (!res.ok) throw new Error('http ' + res.status);
         const body = await res.json();
+        if (body.limit) s.limit = body.limit;
         // 端末の時計とサーバーの時計の差（変更の日時を直すのに使う）
         if (body.now) { const t1 = Date.now(); s.offset = Date.parse(body.now) - (t0 + t1) / 2; }
         if (body.me) s.me = body.me;
         if (body.token) s.token = body.token; // 使っている間は、ログインの期限が延びる
-        if (body.reset) { s.known = {}; since = 0; continue; } // サーバーを作り直した：この端末の記録を送り直す
+        if (body.reset) { s.known = {}; since = 0; trackChanges(); continue; } // サーバーを作り直した：この端末の記録を送り直す
         // 送れた変更を箱から出す（送ったあとに直したものは残す）
         for (const d of sent) { const k = keyOf(d.kind, d.id); if (s.outbox[k] && s.outbox[k].updatedAt === d.updatedAt) delete s.outbox[k]; }
+        const applied = [];
         for (const r of body.rejected || []) {
-          const k = keyOf(r.kind, r.id);
-          if (r.reason === 'stale') { staleKeys.add(k); refetch = true; continue; }
-          // 権限がない・形が違う：端末の記録は消さずに残し、「送れなかった記録」として知らせ続ける
-          s.failed[k] = { reason: r.reason, at: new Date().toISOString() }; delete s.outbox[k];
-          if (!rejectedMsg) rejectedMsg = r.reason;
+          const k = keyOf(r.kind, r.id), mine = sent.find(d => keyOf(d.kind, d.id) === k);
+          if (r.doc) {
+            // サーバーのいまの中身に合わせる（新しい方を優先・権限がない・記録を守る決まり）
+            if (applyDoc(r.doc) !== false) { applied.push(k); changedLocal = true; othersChanged = true; }
+            delete s.outbox[k]; delete s.failed[k];
+            if (r.reason === 'stale') lostCount++; else if (!rejectedMsg) rejectedMsg = r.reason;
+          } else if (r.reason !== 'stale' && !(mine && mine.deleted)) {
+            // サーバーに無い新しい記録が受け付けられなかった：端末には残し、「送れなかった記録」として知らせ続ける
+            s.failed[k] = { reason: r.reason, at: new Date().toISOString() }; delete s.outbox[k];
+            if (!rejectedMsg) rejectedMsg = r.reason;
+          } else delete s.outbox[k];
         }
         const incoming = (body.changes || []).slice().sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || (a.seq - b.seq));
         for (const d of incoming) {
           const k = keyOf(d.kind, d.id), mine = s.outbox[k];
           if (mine && mine.updatedAt > d.updatedAt) continue; // 端末の方が新しい（次に送る）
           if (applyDoc(d) === false) continue;
-          if (staleKeys.has(k)) { lostCount++; staleKeys.delete(k); }
           delete s.outbox[k]; delete s.failed[k];
-          s.known[k] = d.deleted ? undefined : JSON.stringify(docsOf().get(k)?.data ?? null);
-          if (d.deleted) delete s.known[k];
-          changedLocal = true;
+          applied.push(k); changedLocal = true;
+          if (sentStamp[k] !== d.updatedAt) othersChanged = true;
+        }
+        // 受け取ったものを「知っている状態」にする（送り返さない）。ページごとに1回だけ作る
+        if (applied.length) {
+          const cur = docsOf();
+          for (const k of applied) { const d = cur.get(k); if (d) s.known[k] = JSON.stringify(d.data); else delete s.known[k]; }
         }
         since = body.seq;
         if (body.more) continue;
@@ -1860,7 +1890,6 @@ async function syncNow() {
           break;
         }
         if (Object.keys(s.outbox).length) continue;
-        if (refetch && !refetched) { refetched = true; refetch = false; since = 0; continue; } // サーバーの新しい方を取り直す
         break;
       }
       // 送れなかった記録は、箱からは出す（送り続けない）が、端末には残す
@@ -1868,6 +1897,7 @@ async function syncNow() {
       s.since = since;
       s.lastAt = s.lastPullAt = new Date().toISOString(); syncNote = '';
       save();
+      if (othersChanged && undoSnap) { undoSnap = null; const tEl = $('#toast'); if (tEl && tEl.querySelector('[data-act="undo"]')) tEl.hidden = true; }
       if (changedLocal && (!sheet || sheetGone())) render(); else renderSyncBadge();
       if (rejectedMsg) toast(`受け付けられなかった変更があります：${rejectedMsg}`);
       else if (lostCount) toast(`ほかの端末の、より新しい変更を優先しました（${lostCount}件）`);
@@ -1934,7 +1964,7 @@ async function doLogin() {
   S.incidents = S.incidents.filter(i => !i.sample);
   // 前にこの端末でログインしていたなら、まだ送れていない記録と受け取り済みの位置をそのまま使う
   const prev = S.sync && S.sync.known ? S.sync : null;
-  S.sync = { since: 0, known: {}, outbox: {}, failed: {}, lastAt: null, fresh: !prev, ...(prev ? { since: prev.since, known: prev.known, outbox: prev.outbox, failed: prev.failed || {}, lastAt: prev.lastAt, offset: prev.offset } : {}), token: body.token, me: body.member };
+  S.sync = { since: 0, known: {}, outbox: {}, failed: {}, lastAt: null, fresh: prev ? !!prev.fresh : true, ...(prev ? { since: prev.since, known: prev.known, outbox: prev.outbox, failed: prev.failed || {}, lastAt: prev.lastAt, offset: prev.offset } : {}), token: body.token, me: body.member };
   loginMsg = '';
   saved(); go('home'); toast(`${body.member.name}でログインしました`);
   syncNow();

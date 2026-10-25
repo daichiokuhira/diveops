@@ -7,14 +7,16 @@ compatibility_date = "2026-09-01"
 [vars]
 # アプリを開いてよい場所（CORS）。カンマ区切り
 ALLOWED_ORIGINS = "https://daichiokuhira.github.io"
-# 管理者（隊長の指名・パスコードの管理）の職員番号。カンマ区切り。公開時に実際の番号へ変える
-ADMIN_IDS = ""
+# 1回の送信で受け付ける件数（無料プランは5。有料プランなら50などに増やせる）
+CHANGES_PER_REQUEST = "5"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "diveops"
-database_id = "LOCAL-ONLY-REPLACE-ON-DEPLOY"
+database_id = "249acfc5-f6a0-4893-9103-1f706d9d28ce"
 
 # 秘密の値は wrangler secret put で入れる（ここには書かない）
-#   TEAM_PASSCODE … 隊共通のパスコード
-#   SECRET_KEY    … ログインの証明に使う鍵（長い乱数）
+#   TEAM_PASSCODE  … 隊共通のパスコード（12文字以上）
+#   SECRET_KEY     … ログインの証明に使う鍵（長い乱数）
+#   ADMIN_IDS      … 管理者の職員番号（カンマ区切り。公開リポジトリに書かないため secret にする）
+#   ADMIN_PASSCODE … 管理者だけのパスコード（任意。入れると、管理者は隊共通のパスコードでは入れない）

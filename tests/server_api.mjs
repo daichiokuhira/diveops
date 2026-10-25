@@ -78,7 +78,10 @@ try {
   r = await post('/api/sync', { since: top, changes: [] }, M);
   ex('差分の取得（変わっていなければ0件）', [r.body.changes.length, r.body.seq], [0, top]);
   r = await post('/api/sync', { since: 0, changes: [doc('dive', 'D1', { incidentId: 'I1', memberId: '1002', startAt: t(600), maxDepth: 19 }, t(5), true)] }, M);
-  ex('削除も「削除」として伝わる', r.body.changes.find(c => c.id === 'D1').deleted, true);
+  ex('潜水の文書ごとの削除は受け付けない（「削除済み」にする）', r.body.rejected.map(x => x.reason), ['潜水の記録は消せません（「削除済み」にしてください）']);
+  await post('/api/sync', { since: 0, changes: [doc('incident', 'E1', { createdAt: t(600) }, t(600))] }, M);
+  r = await post('/api/sync', { since: 0, changes: [doc('incident', 'E1', {}, t(5), true)] }, M);
+  ex('記録の無い事案の削除は「削除」として伝わる', r.body.changes.find(c => c.id === 'E1').deleted, true);
   r = await post('/api/sync', { since: 0, changes: [doc('dive', 'D2', { incidentId: 'I1', memberId: '1002', startAt: t(60) }, new Date(Date.now() + 3600e3).toISOString())] }, M);
   ex('時計が進んだ端末の変更は受け取らない', r.body.rejected.map(x => x.reason), ['端末の時計が進んでいます。日時を合わせてください']);
   r = await post('/api/sync', { since: 0, changes: [doc('dive', '<img>', {})] }, M);
@@ -125,6 +128,42 @@ try {
   r = await post('/api/sync', { since: 999999, changes: [] }, M);
   ex('サーバーを作り直したときは知らせる', r.body.reset, true);
 
+  // 守りの強化（2周目のレビュー）
+  r = await post('/api/sync', { since: 0, changes: [doc('qual', 'q9', { memberId: '1002', kind: '資格', name: '潜水士免許', date: '2026-02-31', confirmedBy: '偽の隊長', confirmedById: '1001' })] }, M);
+  const q9 = r.body.changes.find(c => c.id === 'q9');
+  ex('確認者の欄は本人が入れても残らない・実在しない日付は空に', [q9.data.confirmedBy, q9.data.confirmedById, q9.data.date], [undefined, undefined, undefined]);
+  r = await post('/api/sync', { since: 0, changes: [{ ...doc('incident', 'Z1', { createdAt: t(9) }), deleted: 'false' }] }, M);
+  ex('削除の印が真偽値でなければ受け付けない', r.body.rejected.map(x => x.reason), ['形が正しくありません']);
+  await post('/api/sync', { since: 0, changes: [doc('member', '1005', { name: '別 隊長', status: '在籍', role: 'leader' })] }, A);
+  r = await post('/api/sync', { since: 0, changes: [doc('member', '1005', { name: '別 隊長', status: '退職', role: 'leader' })] }, L);
+  ex('隊長は別の隊長を退職にできない', r.body.rejected.map(x => x.reason), ['隊長の名簿の変更は管理者だけができます']);
+  await post('/api/sync', { since: 0, changes: [doc('incident', 'K1', { createdAt: t(4000) }, t(4000)), doc('diver', 'K1~1002', { incidentId: 'K1', memberId: '1002', current: { id: 'cur-1', startAt: t(3600) } }, t(3500))] }, M);
+  r = await post('/api/sync', { since: 0, changes: [doc('diver', 'K1~1002', { incidentId: 'K1', memberId: '1002', current: null }, t(10))] }, M);
+  ex('浮上の記録がないまま、潜水中の印は外せない（15分を過ぎたら）', r.body.rejected.map(x => x.reason), ['浮上の記録がないまま、潜水中の印は外せません']);
+  r = await post('/api/sync', { since: 0, changes: [doc('dive', 'cur-1', { incidentId: 'K1', memberId: '1002', startAt: t(3600), maxDepth: 10, adt: 30 }, t(8)), doc('diver', 'K1~1002', { incidentId: 'K1', memberId: '1002', current: null }, t(8))] }, M);
+  ex('浮上の記録と一緒なら外せる', r.body.rejected, []);
+  const big = JSON.stringify({ since: 0, changes: [doc('incident', 'BIG', { createdAt: t(1), memo: 'x'.repeat(3 * 1024 * 1024) })] });
+  const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(big)); c.close(); } });
+  const rb = await fetch(BASE + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + M }, body: stream, duplex: 'half' });
+  ex('大きさを書かずに送っても2MBを超えれば断る', rb.status, 413);
+  r = await post('/api/sync', { since: 0, changes: Array.from({ length: 6 }, (_, i) => doc('incident', 'N' + i, { createdAt: t(1) })) }, M);
+  ex('1回に送れる件数を超えたら断り、上限を知らせる', [r.status, r.body.limit], [413, 5]);
+
+  // 事案の情報は欄ごとに新しい方を取る（2台が別の欄を直しても、両方残る）
+  await post('/api/sync', { since: 0, changes: [doc('incident', 'F1', { createdAt: t(500), site: 'A港', memo: '' }, t(500))] }, M);
+  await post('/api/sync', { since: 0, changes: [{ ...doc('incident', 'F1', { createdAt: t(500), site: 'B港', memo: '' }, t(50)), fields: ['site'] }] }, L);
+  r = await post('/api/sync', { since: 0, changes: [{ ...doc('incident', 'F1', { createdAt: t(500), site: 'A港', memo: '視界不良' }, t(100)), fields: ['memo'] }] }, M);
+  const f1 = r.body.changes.find(c => c.id === 'F1');
+  ex('別の欄の修正は両方残る（電波のない間の古い修正でも）', [r.body.rejected, f1.data.site, f1.data.memo], [[], 'B港', '視界不良']);
+  r = await post('/api/sync', { since: 0, changes: [{ ...doc('incident', 'F1', { createdAt: t(500), site: 'C港' }, t(80)), fields: ['site'] }] }, M);
+  ex('同じ欄は新しい方が勝ち、断るときはサーバーの中身を返す', [r.body.rejected.map(x => x.reason), r.body.rejected[0]?.doc?.data.site], [['stale'], 'B港']);
+  // 消された事案は、中身ごと戻る
+  await post('/api/sync', { since: 0, changes: [doc('incident', 'G1', { createdAt: t(500), title: '戻る事案', site: '佐良浜' }, t(500))] }, M);
+  await post('/api/sync', { since: 0, changes: [doc('incident', 'G1', {}, t(40), true)] }, L);
+  r = await post('/api/sync', { since: 0, changes: [doc('dive', 'GD', { incidentId: 'G1', memberId: '1002', startAt: t(300) }, t(30))] }, M);
+  const g1 = r.body.changes.find(c => c.id === 'G1');
+  ex('消された事案は中身ごと戻る', [g1.deleted, g1.data.title, g1.data.site], [false, '戻る事案', '佐良浜']);
+
   // 退職にすると、その人の証明は使えなくなる
   await post('/api/sync', { since: 0, changes: [doc('member', '1002', { name: '見本 二郎', status: '退職' })] }, L);
   ex('退職した隊員の証明は使えない', (await post('/api/sync', { since: 0, changes: [] }, M)).status, 401);
@@ -134,6 +173,8 @@ try {
   for (let i = 0; i < 12; i++) last = await post('/api/login', { memberId: '1001', passcode: 'wrong' + i });
   ex('同じ職員番号で失敗が続くと止める', last.status, 429);
   ex('ほかの職員番号は止めない（署で一斉にログインしても）', (await post('/api/login', { memberId: '9001', passcode: PASS })).status, 200);
+  const other = await fetch(BASE + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.9' }, body: JSON.stringify({ memberId: '1001', passcode: PASS }) });
+  ex('ほかの場所からの本人は締め出されない', other.status, 200);
 } catch (e) {
   ng++; console.log('NG 例外', e);
 } finally {

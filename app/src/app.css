@@ -1,10 +1,13 @@
-/* 屋外の強い日差しでも読める白黒。差し色の黄は「選択中」と見出しの下線だけに使う。
+/* 紺と黄（消防の制服の色）。屋外の強い日差しでも読めるよう、文字は紺地に白・白地に紺。
+   黄は「選択中」「見出しの下線」と、暗い表示（紺地）の主ボタンに使う。白地に黄の文字は使わない。
    レイアウト：片手で上から下へ。1画面1目的、主ボタンは画面下部の親指の届く位置。 */
 :root {
   --bg: #ffffff;
-  --ink: #111111;
-  --accent: #ffd400;
-  --on-accent: #111111;
+  --ink: #1a2b4c;          /* 紺 */
+  --accent: #ffd400;       /* 黄 */
+  --on-accent: #1a2b4c;
+  --primary: #1a2b4c;      /* 主ボタン：明るい表示は紺地に白 */
+  --on-primary: #ffffff;
   --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
   --num: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
   --fs-xs: 0.8125rem;
@@ -15,10 +18,11 @@
   --tap: 3rem;
   --r: 6px;
 }
+/* 暗い表示：紺地に白い文字、主ボタンは黄に紺の文字 */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #111111; --ink: #f4f4f4; color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; color-scheme: dark; }
 }
-:root[data-theme="dark"] { --bg: #111111; --ink: #f4f4f4; color-scheme: dark; }
+:root[data-theme="dark"] { --bg: #16243f; --ink: #f3f5f9; --primary: #ffd400; --on-primary: #16243f; color-scheme: dark; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -52,7 +56,7 @@ p { margin: 0; }
 
 /* ---- ボタン ---- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: var(--tap); padding: 0 1.1rem; border-radius: var(--r); border: 2px solid var(--ink); background: var(--bg); color: var(--ink); font-weight: 700; cursor: pointer; text-decoration: none; touch-action: manipulation; }
-.btn-primary { background: var(--ink); color: var(--bg); }
+.btn-primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .btn-block { width: 100%; }
 .btn-big { min-height: 3.75rem; font-size: var(--fs-m); }
 .btn-quiet { border-color: transparent; padding: 0 0.6rem; }

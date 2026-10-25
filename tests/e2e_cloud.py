@@ -195,11 +195,19 @@ async def main():
         await settled(A); await settled(B)
         await refresh(C); await C.click('text=同期試験')
         ex('2台で浮上を押しても潜水は1本', await C.locator('[data-sheet="diver"][data-i="1002"] >> text=1本').count(), 1)
+        # ほかの端末の変更が届いたあとは「元に戻す」を出さない（ほかの端末の記録を消さないため）
+        await A.click('[data-act="sheet"][data-sheet="down"][data-i="1002"]'); await A.click('[data-act="down-depth"][data-v="9"]'); await A.click('[data-act="do-down"]')
+        await B.click('[data-act="sheet"][data-sheet="editInc"]'); await B.fill('#i-memo', 'B端末のメモ'); await B.click('[data-act="save-inc"]'); await settled(B)
+        await A.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); await A.wait_for_timeout(1500)
+        ex('ほかの端末の変更が届いたら「元に戻す」は消える', await A.locator('#toast [data-act="undo"]').is_visible(), False)
         # 事案の情報を直したあと、ほかの端末が潜水を記録しても、直した内容は戻らない
         await A.click('[data-act="sheet"][data-sheet="editInc"]'); await A.fill('#i-site', '平良港 第1岸壁'); await A.click('[data-act="save-inc"]'); await settled(A)
         await B.click('[data-act="sheet"][data-sheet="down"][data-i="1004"]'); await B.click('[data-act="down-depth"][data-v="9"]'); await B.click('[data-act="do-down"]'); await settled(B)
         await refresh(C); await C.click('text=同期試験')
         ex('事案の修正が、ほかの端末の潜水の記録で戻らない', await C.locator('text=平良港 第1岸壁').count() >= 1, True)
+        await C.click('[data-act="sheet"][data-sheet="editInc"]')
+        ex('2台が別の欄を直しても両方残る（地点とメモ）', await C.input_value('#i-memo'), 'B端末のメモ')
+        await C.click('[data-act="sheet-close"]')
         # 開いている画面の相手が、ほかの端末で外されたら閉じて知らせる（別の人を記録しない）
         await A.click('[data-act="sheet"][data-sheet="addDiver"]'); await A.click('[data-act="add-diver"][data-v="1001"]'); await settled(A)
         await A.click('[data-act="sheet"][data-sheet="down"][data-i="1001"]')

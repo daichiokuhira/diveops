@@ -2,7 +2,8 @@
  * 決めた欄だけを、決めた型・長さ・範囲で残し、それ以外は捨てる。必須の欄が無い・壊れているときは null（受け付けない）。
  * 他の端末から届いた値を画面に出す前の守り（細工した文字列や、数字に見せかけた文字を通さない）。 */
 export const DocSchema = (() => {
-  const CTRL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+  // 制御文字・向きを変える文字・幅の無い文字は取り除く
+  const CTRL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g;
   const str = (max, { req = false, oneLine = true } = {}) => v => {
     if (v == null || v === '') return req ? undefined : (v === '' ? '' : null);
     if (typeof v !== 'string' && typeof v !== 'number') return undefined;
@@ -20,11 +21,21 @@ export const DocSchema = (() => {
     const n = typeof v === 'number' ? v : (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : NaN);
     return Number.isFinite(n) && n >= lo && n <= hi ? n : undefined;
   };
+  const okYear = y => y >= 1950 && y <= 2100;
   const iso = ({ req = false } = {}) => v => {
     if (v == null || v === '') return req ? undefined : null;
-    return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(v) && !isNaN(Date.parse(v)) ? v : undefined;
+    if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(v)) return undefined;
+    const t = Date.parse(v);
+    return !isNaN(t) && okYear(new Date(t).getUTCFullYear()) ? v : undefined;
   };
-  const day = v => (v == null || v === '' ? '' : typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)) ? v : undefined);
+  // 日付は、実在する日（2026-02-31 などは不可）で、1950〜2100年
+  const day = v => {
+    if (v == null || v === '') return '';
+    const m = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (!m || !okYear(+m[1])) return undefined;
+    const d = new Date(Date.UTC(+m[1], m[2] - 1, +m[3]));
+    return d.getUTCMonth() === m[2] - 1 && d.getUTCDate() === +m[3] ? v : undefined;
+  };
   const daySlash = v => (v == null || v === '' ? '' : typeof v === 'string' && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(v) ? v : undefined);
   const oneOf = (list, { def } = {}) => v => (v == null || v === '' ? (def ?? (list.includes('') ? '' : null)) : list.includes(v) ? v : undefined);
   const bool = v => (v == null ? null : typeof v === 'boolean' ? v : undefined);
@@ -58,6 +69,7 @@ export const DocSchema = (() => {
   }
   return {
     kinds: Object.keys(F),
+    fields(kind) { return F[kind] || {}; },
     // 文書の中身を形に合わせる。受け付けられないときは null
     clean(kind, data) { return F[kind] && data && typeof data === 'object' && !Array.isArray(data) ? clean(F[kind], data) : null; }
   };
