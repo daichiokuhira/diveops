@@ -121,7 +121,6 @@ async def main():
 
         # 電波のない間の記録：A が電波なしで 1002 を浮上 → 電波が戻ったら送る
         await ca.set_offline(True)
-        await A.click('[data-act="ascent"][data-i="1002"]')
         await A.click('[data-act="sheet"][data-sheet="up"][data-i="1002"]')
         await A.fill('#u-depth', '11'); await A.dispatch_event('#u-depth', 'input')
         await A.click('[data-act="up-safety"][data-v="有"]'); await A.click('[data-act="up-cond"][data-v="無"]')

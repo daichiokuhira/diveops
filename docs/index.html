@@ -296,7 +296,7 @@ const DocSchema = (() => {
   const F = {
     member: { name: str(60, { req: true }), unit: str(60), status: oneOf(['在籍', '異動', '退職'], { def: '在籍' }), statusAt: daySlash, role: oneOf(['member', 'leader'], { def: 'member' }) },
     qual: { memberId: id({ req: true }), kind: oneOf(['資格', '研修'], { def: '資格' }), name: str(60, { req: true }), org: str(30), level: str(30), date: day, expires: day, no: str(60), note: str(200), addedAt: iso(), confirmedAt: iso(), confirmedBy: str(60), confirmedById: id() },
-    incident: { createdAt: iso({ req: true }), updatedAt: iso(), type: oneOf(['災害', '訓練', '研修', 'その他'], { def: 'その他' }), title: str(120), site: str(120), commanderId: id({ empty: true }), watchId: id({ empty: true }), gas: str(40), memo: str(1000, { oneLine: false }), waterTemp: str(10), visibility: str(10), sea: str(60), strict: bool, status: oneOf(['active', 'closed'], { def: 'closed' }), closedAt: iso(), tableId: str(120), tableSnap: any(60000), sentAt: iso(), imported: bool },
+    incident: { createdAt: iso({ req: true }), updatedAt: iso(), type: oneOf(['災害', '訓練', '研修', 'その他'], { def: 'その他' }), title: str(120), site: str(120), commanderId: id({ empty: true }), watchId: id({ empty: true }), gas: str(40), memo: str(1000, { oneLine: false }), waterTemp: str(10), visibility: str(10), sea: str(60), strict: bool, status: oneOf(['active', 'closed'], { def: 'closed' }), closedAt: iso(), tableId: str(120), tableSnap: any(60000), sentAt: iso(), imported: bool, removed: bool, removedAt: iso(), removedBy: str(60) },
     diver: { incidentId: id({ req: true }), memberId: id({ req: true }), tank: num(0, 50), sac: num(0, 100), current: obj(CURRENT), nextFirst: bool },
     dive: { incidentId: id({ req: true }), memberId: id({ req: true }), startAt: iso({ req: true }), ascentAt: iso(), endAt: iso(), updatedAt: iso(), plannedDepth: num(0, 200), tank: num(0, 50), startP: num(0, 400), endP: num(0, 400), maxDepth: num(0, 200), adt: num(0, 2000), safetyStop: nullableBool, stopMin: num(0, 600), decoStopDone: num(0, 600), condition: oneOf(['有', '無', '']), note: str(1000), treatAsFirst: bool, deleted: bool, edits: list(obj(EDIT), 50), imported: bool, importNo: num(0, 99999), noTime: bool, decoTable: oneOf(['有', '無', '']) }
   };
@@ -942,6 +942,7 @@ function globalAlerts() {
   if (ready && useLS) a.push('この端末では、記録を容量の小さい保存先（localStorage）に置いています。こまめに控えを作ってください。');
   if (!storageOK) a.push('この端末に記録を保存できていません。このまま閉じると記録が消えます。紙にも控え、設定の「控えを作る」を試してください。');
   if (loadNote) a.push(loadNote);
+  if ((view.name === 'board' || view.name === 'summary') && curInc()?.removed) a.push('この事案は削除されています。一覧・経歴簿・Excelには出ません（隊長が設定の「削除した事案」から元に戻せます）。');
   return a.length || upd || stopped ? `<div class="wrap wrap-alert">${stopped}${a.map(t => `<div class="alert" role="alert">${ic('triangle-alert')}<span>${esc(t)}</span></div>`).join('')}${upd}</div>` : '';
 }
 function render() {
@@ -992,8 +993,9 @@ const sheetHead = t => `<div class="sheet-head"><h1 id="sheet-title" tabindex="-
 let homeAll = false;
 function viewHome() {
   const live = i => i.status === 'active' || i.divers.some(d => d.current);
-  const active = S.incidents.filter(live);
-  const past = S.incidents.filter(i => !live(i)).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const shown = S.incidents.filter(i => !i.removed);
+  const active = shown.filter(live);
+  const past = shown.filter(i => !live(i)).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   const t = activeTable();
   const hasSample = S.members.some(m => m.sample) || S.incidents.some(i => i.sample);
   return `${bar('潜水現場記録', esc(ORG_NAME), false, `<button class="btn btn-icon" data-act="go" data-to="settings" aria-label="設定">${ic('settings')}</button>`)}
@@ -1122,9 +1124,8 @@ function diverRow(inc, dv, i) {
     clock = `<div class="clock" data-from="${esc(c.startAt)}">00:00</div>`;
     info = `<div>予定 ${c.plannedDepth ?? '—'}m・上限 <b class="num">${L.lim ?? '—'}分</b>${L.by ? `（${L.by}で決まる）` : '（潜水表で判断できません）'}</div>`;
     info += `<div class="remain" data-remain-from="${esc(c.startAt)}" data-limit="${L.lim ?? ''}" data-stop="${esc(c.ascentAt || '')}"></div>`;
-    btn = c.ascentAt
-      ? `<button class="btn btn-primary" data-act="sheet" data-sheet="up" data-i="${esc(i)}">${ic('arrow-up-from-line')}水面に着いた</button><button class="btn btn-quiet btn-under" data-act="ascent-undo" data-i="${esc(i)}">浮上開始を取り消す</button>`
-      : `<button class="btn btn-primary" data-act="ascent" data-i="${esc(i)}">${ic('arrow-up')}浮上開始</button><button class="btn btn-quiet btn-under" data-act="sheet" data-sheet="up" data-i="${esc(i)}">もう水面にいる</button>`;
+    // 現場では浮上開始の合図が確かめられないことが多いので、浮上開始は記録しない。水面に着いたら「浮上を記録」
+    btn = `<button class="btn btn-primary" data-act="sheet" data-sheet="up" data-i="${esc(i)}">${ic('arrow-up-from-line')}浮上を記録</button>`;
   } else if (st === 'rest') {
     const al = allowanceFor(inc, dv);
     stateLabel = `<span class="state">${ic('timer')}水面休息</span>`;
@@ -1191,9 +1192,10 @@ function upDefaults(inc, dv) {
   const c = dv.current, t = incidentTable(inc).data;
   const stopMin = t.rules?.safetyStopMinutes ?? 3;
   const endAt = sheet.endTouched ? sheet.endAt : nowISO();
-  const ascentAt = sheet.ascentTouched ? sheet.ascentAt : (c.ascentAt || null);
+  const ascentAt = c.ascentAt || null;
   const elapsed = Math.ceil(minsBetween(c.startAt, endAt));
-  // NAUIの潜水時間は、潜降開始から浮上開始まで。浮上開始がなければ経過時間から安全停止の分を引いた目安（安全停止を選ぶまでは引かない）
+  // NAUIの潜水時間は、潜降開始から浮上開始まで。浮上開始は記録しないので、水面までの経過時間から安全停止の分を引いた値にする
+  // （浮上にかかった時間が入る分、潜水表の上では厳しめ＝安全側。安全停止を選ぶまでは引かない）。前の版で記録した浮上開始があれば、それを使う
   const adt = ascentAt ? Math.max(1, Math.ceil(minsBetween(c.startAt, ascentAt))) : Math.max(1, elapsed - (sheet.safety === '有' ? stopMin : 0));
   return { endAt, ascentAt, elapsed, adt, stopMin };
 }
@@ -1206,7 +1208,7 @@ function upResult(inc, dv) { return Engine.computeDive(incidentTable(inc).data, 
 function sheetUp() {
   const inc = curInc(), dv = DVof(inc, sheet.i), m = member(dv.memberId), c = dv.current;
   if (!sheet.init) {
-    sheet.init = true; sheet.safety = null; sheet.endTouched = false; sheet.ascentTouched = false;
+    sheet.init = true; sheet.safety = null; sheet.endTouched = false;
     sheet.maxDepth = ''; sheet.endP = ''; sheet.cond = null; sheet.note = ''; sheet.decoStop = ''; sheet.adtTouched = false;
   }
   const u = upDefaults(inc, dv);
@@ -1218,12 +1220,11 @@ function sheetUp() {
   const ascLong = u.ascentAt && minsBetween(u.ascentAt, u.endAt) > 15;
   return `${sheetHead(`${esc(m.name)}　${liveDives(dv).length + 1}本目の浮上`)}
   <p class="small num">潜降 ${hm(c.startAt)}・予定 ${c.plannedDepth ?? '—'}m</p>
-  <div class="grid3">
-    <label class="field"><span>浮上開始</span><input class="input num" id="u-asc" type="time" value="${u.ascentAt ? hm(u.ascentAt) : ''}" data-live></label>
+  <div class="grid2">
     <label class="field"><span>水面に着いた</span><input class="input num" id="u-end" type="time" value="${hm(u.endAt)}" data-live></label>
     <label class="field"><span>潜水時間（分）</span><input class="input num" id="u-adt" inputmode="numeric" value="${esc(sheet.adt)}" data-live></label>
   </div>
-  <p class="small">${u.ascentAt ? '潜水時間は、潜降から浮上開始までです。' : '浮上開始の時刻がないため、潜水時間は経過時間からの目安です。浮上開始の時刻を入れると正確になります。'}</p>
+  <p class="small">${u.ascentAt ? '潜水時間は、潜降から浮上開始までです。' : '潜水時間は、潜降から水面に着くまでの時間（安全停止「有」ならその分を引く）です。浮上にかかった時間が入るので、潜水表の上では厳しめになります。ダイブコンピュータの値が分かれば直してください。'}</p>
   ${ascLong ? `<div class="alert soft">${ic('info')}<span>浮上開始から水面まで ${Math.round(minsBetween(u.ascentAt, u.endAt))}分あります。浮上開始の時刻を確かめてください。</span></div>` : ''}
   <div class="field"><span>最大水深（m）<b>必須</b></span>
     <input class="input num" id="u-depth" inputmode="decimal" value="${esc(sheet.maxDepth)}" placeholder="深度計の最大値" data-live>
@@ -1413,7 +1414,19 @@ function sheetEditInc() {
   </div>
   <label class="field"><span>備考</span><textarea class="input" id="i-memo">${esc(inc.memo)}</textarea></label>
   <button class="btn btn-primary btn-big btn-block" data-act="save-inc">${ic('check')}保存</button>
-  ${inc.status === 'active' && !inc.divers.some(d => d.dives.length || d.current) ? `<button class="btn" data-act="delete-inc">${ic('trash-2')}この事案を削除</button>` : ''}`;
+  ${incDeleteBlock(inc)}`;
+}
+// 事案・訓練の削除。潜水の記録がなければそのまま消す。記録があれば「削除済み」の印を付けて隠す（設定から元に戻せる。記録は残る）
+let confirmDelId = null;
+function incDeleteBlock(inc) {
+  const hasDives = inc.divers.some(d => d.dives.length), diving = inc.divers.some(d => d.current);
+  if (diving) return '<p class="small">潜水中の人がいる間は、この事案を削除できません。</p>';
+  if (!hasDives) return `<button class="btn" data-act="delete-inc">${ic('trash-2')}この事案を削除</button>`;
+  if (CLOUD && !isLeader()) return '<p class="small">潜水の記録がある事案の削除は、隊長ができます。</p>';
+  return confirmDelId === inc.id
+    ? `<div class="alert">${ic('triangle-alert')}<span>「${esc(inc.title || inc.type)}」を、潜水の記録ごと一覧・経歴簿・Excelから外します。${CLOUD ? '全員の端末から見えなくなります。' : ''}設定の「削除した事案」から元に戻せます。</span></div>
+      <div class="grid2"><button class="btn" data-act="remove-inc-cancel">やめる</button><button class="btn btn-primary" data-act="remove-inc-ok">${ic('trash-2')}削除する</button></div>`
+    : `<button class="btn" data-act="remove-inc">${ic('trash-2')}この事案を削除（テストの入力など）</button>`;
 }
 
 /* ===== 終了・送る ===== */
@@ -1438,7 +1451,7 @@ function viewSummary() {
         <dt>海況</dt><dd>水温 ${esc(inc.waterTemp || '—')}℃・透視度 ${esc(inc.visibility || '—')}m・${esc(inc.sea || '—')}</dd>
         <dt>潜水表</dt><dd>${esc(tableLabel(incidentTable(inc)))}</dd>
       </dl>
-      ${inc.imported ? `<div class="alert soft">${ic('info')}<span>台帳から取り込んだ記録です（正本は台帳）。アプリでは直せません。直すときは台帳で直し、取り込み直してください。</span></div>`
+      ${inc.imported ? `<div class="alert soft">${ic('info')}<span>台帳から取り込んだ記録です（正本は台帳）。アプリでは直せません。直すときは台帳で直し、取り込み直してください。</span></div>${incDeleteBlock(inc)}`
         : `<button class="btn" data-act="sheet" data-sheet="editInc">${ic('pencil')}事案の情報を直す</button>`}
     </section>
     <section class="stack"><h2>潜水の記録（${live.length}本）</h2>
@@ -1528,7 +1541,7 @@ function periodRange(p) {
 // 全事案から、ある隊員の潜水（削除したものを除く）を集める
 function diveRowsFor(memberId) {
   const out = [];
-  S.incidents.forEach(inc => inc.divers.forEach(dv => {
+  S.incidents.forEach(inc => !inc.removed && inc.divers.forEach(dv => {
     if (dv.memberId !== memberId) return;
     const res = diverResults(inc, dv);
     dv.dives.forEach((d, k) => { if (!d.deleted) out.push({ inc, d, r: res[k], no: d.importNo ?? k + 1, date: ymd(d.startAt) }); });
@@ -1733,7 +1746,7 @@ async function exportRecordsCSV() {
   if (!ids.length) { toast('隊員を選んでください'); return; }
   const q = v => { let s = String(v ?? ''); if (typeof v === 'string' && /^[=+\-@\t]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const lines = [CSV_HEAD.map(q).join(',')];
-  S.incidents.forEach(inc => { if (inc.imported) return; csvRows(inc).forEach(r => { const d = ymd(r.startAt); if (!r.imported && ids.includes(r.memberId) && d >= range[0] && d <= range[1]) lines.push(csvValues(inc, r).map(q).join(',')); }); });
+  S.incidents.forEach(inc => { if (inc.imported) return; csvRows(inc).forEach(r => { const d = ymd(r.startAt); if (!r.imported && ids.includes(r.memberId) && d >= range[0] && d <= range[1]) lines.push(csvValues(inc, inc.removed ? { ...r, deleted: true } : r).map(q).join(',')); }); });
   if (lines.length < 2) { toast('この期間の記録はありません'); return; }
   const text = '﻿' + lines.join('\r\n') + '\r\n', name = `潜水記録_台帳用_${ymdCompact(nowISO())}.csv`;
   const r = await shareText(name, text, 'text/csv');
@@ -1976,6 +1989,7 @@ function viewSettings() {
       <label class="field"><span>確認のため「削除」と入力</span><input class="input" id="wipe" value="${esc(confirmWipe)}" autocomplete="off"></label>
       <button class="btn" data-act="wipe" ${confirmWipe === '削除' ? '' : 'disabled'}>${ic('trash-2')}すべて消す</button>
     </section>
+    ${removedBlock()}
     <section class="stack about"><h2>このアプリについて</h2>
       <p><b>潜水現場記録</b><br><span class="small">v${APP_VERSION}・潜水表 ${esc(tableLabel(activeTable()))}<br>${esc(ORG_NAME)}</span></p>
       <p class="small">紙で残してきた潜水の記録を、現場のスマホで残し、隊の全員で共有するために、${esc(DEVELOPER)}が作りました。潜降・浮上の記録、NAUI潜水表による上限の目安、経歴簿のExcel出力、署の潜水管理台帳への取り込みまでを1つにしています。</p>
@@ -1983,6 +1997,17 @@ function viewSettings() {
       <p class="small">開発：${esc(DEVELOPER)}</p>
     </section>
   </main>`;
+}
+
+function removedBlock() {
+  const rs = S.incidents.filter(i => i.removed).sort((a, b) => String(b.removedAt || '').localeCompare(String(a.removedAt || '')));
+  if (!rs.length) return '';
+  const can = !CLOUD || isLeader();
+  return `<section class="stack"><h2>削除した事案（${rs.length}件）</h2>
+    <p class="small">潜水の記録は消さずに残しています。${can ? '' : '元に戻すのは隊長ができます。'}</p>
+    <div class="list">${rs.map(i => `<div class="row item"><div class="item-main"><div class="item-title">${esc(i.title || i.type)}</div><div class="small num">${esc(ymd(i.createdAt))}・${esc(i.site || '')}・削除 ${i.removedAt ? esc(ymd(i.removedAt)) : ''}${i.removedBy ? ` ${esc(i.removedBy)}` : ''}</div></div>
+      ${can ? `<button class="btn" data-act="restore-inc" data-id="${esc(i.id)}">${ic('undo-2')}元に戻す</button>` : ''}</div>`).join('')}</div>
+  </section>`;
 }
 
 /* ---------- 時計 ---------- */
@@ -2121,12 +2146,6 @@ document.addEventListener('click', async e => {
       dv.current = { id: uid(), startAt: nowISO(), plannedDepth: sheet.depth, startP: sp === '' ? null : sp, tank: dv.tank };
       touch(inc); saved(); sheet = null; render(); toast(`${member(dv.memberId).name}　潜降 ${hm(dv.current.startAt)}`, true); break;
     }
-    case 'ascent-undo': { const dv = DVof(inc, I); snapshot(); dv.current.ascentAt = null; touch(inc); saved(); render(); toast('浮上開始を取り消しました'); break; }
-    case 'ascent': {
-      const dv = DVof(inc, I); snapshot(); delete dv._stub;
-      dv.current.ascentAt = nowISO();
-      touch(inc); saved(); render(); toast(`${member(dv.memberId).name}　浮上開始 ${hm(dv.current.ascentAt)}`, true); break;
-    }
     case 'next-first': { const dv = DVof(inc, I); snapshot(); dv.nextFirst = true; touch(inc); saved(); if (sheet) renderSheet(); render(); toast('次の潜水を1本目として扱います', true); break; }
     case 'next-first-off': { const dv = DVof(inc, I); dv.nextFirst = false; touch(inc); saved(); renderSheet(); render(); break; }
 
@@ -2217,7 +2236,19 @@ document.addEventListener('click', async e => {
       inc.waterTemp = toHalf($('#i-temp').value); inc.visibility = toHalf($('#i-vis').value); inc.sea = $('#i-sea').value.trim(); inc.memo = $('#i-memo').value.trim();
       touch(inc); saved(); sheet = null; render(); toast('事案の情報を保存しました', true); break;
     }
-    case 'delete-inc': snapshot(); S.incidents = S.incidents.filter(i => i !== inc); saved(); go('home'); toast('事案を削除しました', true); break;
+    case 'delete-inc': snapshot(); S.incidents = S.incidents.filter(i => i !== inc); saved(); sheet = null; go('home'); toast('事案を削除しました', true); break;
+    case 'remove-inc': confirmDelId = inc?.id ?? null; sheet ? renderSheet() : render(); break;
+    case 'remove-inc-cancel': confirmDelId = null; sheet ? renderSheet() : render(); break;
+    case 'remove-inc-ok': {
+      if (!inc || inc.divers.some(d => d.current) || (CLOUD && !isLeader())) break;
+      confirmDelId = null; snapshot(); inc.removed = true; inc.removedAt = nowISO(); inc.removedBy = CLOUD ? (me()?.name || '') : '';
+      touch(inc); saved(); sheet = null; go('home'); toast('事案を削除しました（設定の「削除した事案」から元に戻せます）', true); break;
+    }
+    case 'restore-inc': {
+      const x = S.incidents.find(i => i.id === el.dataset.id);
+      if (!x || (CLOUD && !isLeader())) break;
+      snapshot(); x.removed = false; x.removedAt = null; x.removedBy = ''; touch(x); saved(); render(); toast('事案を元に戻しました', true); break;
+    }
     case 'close-inc': snapshot(); inc.status = 'closed'; inc.closedAt = nowISO(); touch(inc); saved(); render(); $('#send-head')?.scrollIntoView({ block: 'start' }); break;
     case 'reopen-inc': if (inc.imported) break; inc.status = 'active'; touch(inc); saved(); go('board', { incidentId: inc.id }); break;
 
@@ -2375,8 +2406,7 @@ document.addEventListener('input', e => {
     if (t.id === 'u-adt') sheet.adtTouched = true;
     const later = v => (new Date(v) < new Date(c.startAt) ? new Date(new Date(v).getTime() + 86400000).toISOString() : v);
     if (t.id === 'u-end') { const v = isoFromHM(c.startAt, t.value); if (v) { sheet.endTouched = true; sheet.endAt = later(v); } }
-    if (t.id === 'u-asc') { const v = isoFromHM(c.startAt, t.value); sheet.ascentTouched = true; sheet.ascentAt = v ? later(v) : null; }
-    if ((t.id === 'u-end' || t.id === 'u-asc') && !sheet.adtTouched) { sheet.adt = String(upDefaults(inc, dv).adt); const a = $('#u-adt'); if (a) a.value = sheet.adt; }
+    if (t.id === 'u-end' && !sheet.adtTouched) { sheet.adt = String(upDefaults(inc, dv).adt); const a = $('#u-adt'); if (a) a.value = sheet.adt; }
     const r = upResult(inc, dv);
     sheet.shown = r.status;
     if ((r.status === 'deco') !== !!$('#u-deco')) {

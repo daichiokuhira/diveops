@@ -153,6 +153,8 @@ function checkChange(user, ch, cur) {
     case 'incident':
       // 潜水表の写しを、あとから別の表に替えるのは隊長だけ（計算の元が変わるため）
       if (old && old.tableSnap && JSON.stringify(old.tableSnap) !== JSON.stringify(d.tableSnap ?? old.tableSnap) && !leader) return '事案の潜水表を替えるのは隊長だけができます';
+      // 潜水の記録がある事案の削除（削除済みの印）と、その取り消しは隊長だけ。記録そのものは消さずに残す
+      if (!!old?.removed !== !!d.removed && !leader) return '事案の削除と元に戻すのは隊長だけができます';
       return null;
     default: return null; // 潜水員・潜水は、ログインした隊員なら誰でも
   }

@@ -147,6 +147,13 @@ try {
   r = await post('/api/sync', { since: 0, changes: Array.from({ length: 6 }, (_, i) => doc('incident', 'N' + i, { createdAt: t(1) })) }, M);
   ex('1回に送れる件数を超えたら断り、上限を知らせる', [r.status, r.body.limit], [413, 5]);
 
+  // 潜水の記録がある事案の削除（削除済みの印）は隊長だけ
+  await post('/api/sync', { since: 0, changes: [doc('incident', 'RM1', { createdAt: t(3000), title: 'テスト入力' }, t(3000))] }, M);
+  r = await post('/api/sync', { since: 0, changes: [doc('incident', 'RM1', { createdAt: t(3000), title: 'テスト入力', removed: true }, t(20))] }, M);
+  ex('隊員は事案を削除できない', r.body.rejected.map(x => x.reason), ['事案の削除と元に戻すのは隊長だけができます']);
+  r = await post('/api/sync', { since: 0, changes: [doc('incident', 'RM1', { createdAt: t(3000), title: 'テスト入力', removed: true, removedAt: t(19), removedBy: '見本 一郎' }, t(19))] }, L);
+  ex('隊長は事案を削除できる（記録は残る）', [r.body.rejected, r.body.changes.find(c => c.id === 'RM1')?.data.removed, r.body.changes.find(c => c.id === 'RM1')?.deleted], [[], true, false]);
+
   // 事案の情報は欄ごとに新しい方を取る（2台が別の欄を直しても、両方残る）
   await post('/api/sync', { since: 0, changes: [doc('incident', 'F1', { createdAt: t(500), site: 'A港', memo: '' }, t(500))] }, M);
   await post('/api/sync', { since: 0, changes: [{ ...doc('incident', 'F1', { createdAt: t(500), site: 'B港', memo: '' }, t(50)), fields: ['site'] }] }, L);

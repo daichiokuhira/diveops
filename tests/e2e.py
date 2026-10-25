@@ -78,16 +78,12 @@ async def main():
         await pg.screenshot(path=SH + '04_board_over.png')
         ex('上限超過を反転表示', await pg.locator('.remain.over').count(), 1)
 
-        # 浮上開始の押し間違いは取り消せる
-        await pg.click('[data-act="ascent"][data-i="S02"]')
-        await pg.click('[data-act="ascent-undo"][data-i="S02"]')
-        ex('浮上開始を取り消すと潜水中に戻る', await pg.locator('.remain.over').count(), 1)
-        # 浮上開始 → 水面に着いた
-        await pg.click('[data-act="ascent"][data-i="S02"]')
-        ex('浮上中の表示', await pg.locator('text=浮上中').count() >= 1, True)
+        # 浮上開始は記録しない（現場では合図が確かめられないことが多い）。水面に着いたら「浮上を記録」
+        ex('浮上開始のボタンはなく、「浮上を記録」だけ', [await pg.locator('[data-act="ascent"]').count(), await pg.locator('[data-sheet="up"][data-i="S02"] >> text=浮上を記録').count()], [0, 1])
         await pg.click('[data-act="sheet"][data-sheet="up"][data-i="S02"]')
+        ex('浮上の画面に浮上開始の欄はない', await pg.locator('#u-asc').count(), 0)
         ex('最大水深は空欄で始まる', await pg.input_value('#u-depth'), '')
-        ex('潜水時間は浮上開始まで（55分、切り上げ）', await pg.input_value('#u-adt') in ('55', '56'), True)
+        ex('潜水時間は水面に着くまでの経過時間（55分、切り上げ）', await pg.input_value('#u-adt') in ('55', '56'), True)
         await pg.click('[data-act="do-up"]')
         ex('水深なしでは記録できない', 'S02' in await pg.evaluate(js("return JSON.stringify(await getS());"), None) and await pg.locator('#u-depth').count() == 1, True)
         await pg.click('[data-act="up-depth"][data-v="17"]')
@@ -150,8 +146,7 @@ async def main():
         await pg.click('[data-act="sheet"][data-sheet="down"][data-i="S03"]')
         await pg.click('[data-act="down-depth"][data-v="12"]')
         await pg.click('[data-act="do-down"]')
-        await pg.click('[data-act="sheet"][data-sheet="up"][data-i="S03"]')  # 浮上開始を押し忘れて「もう水面にいる」
-        ex('浮上開始なしでも浮上画面を開ける', await pg.locator('#u-asc').input_value(), '')
+        await pg.click('[data-act="sheet"][data-sheet="up"][data-i="S03"]')
         await pg.fill('#u-depth', '11.5'); await pg.dispatch_event('#u-depth', 'input')
         await pg.click('[data-act="up-safety"][data-v="無"]')
         await pg.click('[data-act="up-cond"][data-v="有"]')
@@ -198,8 +193,7 @@ async def main():
         ex('全角の終了圧を半角で', r0['終了圧(気圧)'], '70')
         ex('監視員', r0['監視員'], '見本 四郎')
         ex('呼吸ガス', r0['呼吸ガス'], '空気')
-        ex('浮上開始時刻あり', len(r0['浮上開始時刻']) == 5, True)
-        ex('浮上開始なしは空', r1['浮上開始時刻'], '')
+        ex('浮上開始時刻は記録しない（列は台帳との約束で残す）', [r0['浮上開始時刻'], r1['浮上開始時刻']], ['', ''])
         ex('安全停止 無', [r1['安全停止'], r1['浮上停止の時間(分)']], ['無', ''])
         ex('浮上停止 5m・3分', [r0['浮上停止の水深(m)'], r0['浮上停止の時間(分)']], ['5', '3'])
         ex('修正記録', r0['修正記録'].startswith('2回'), True)
@@ -325,6 +319,20 @@ async def main():
         ex('接続が切れた後も保存できる', [await pg.locator('text=保存できませんでした').count(), await pg.evaluate(js("return (await getS()).settings.theme;"), None)], [0, 'dark'])
         await pg.click('[data-act="theme"][data-v="auto"]'); await pg.wait_for_timeout(200)
         await pg.click('[data-act="back"]')
+
+        # 事案・訓練の削除（テストの入力など）：潜水の記録は残し、一覧・経歴簿から外す。設定から元に戻せる
+        await pg.locator('.item', has_text='水中捜索訓練').first.click()
+        await pg.click('text=事案の情報を直す')
+        await pg.click('[data-act="remove-inc"]')
+        ex('削除の前に確かめる', await pg.locator('[data-act="remove-inc-ok"]').count(), 1)
+        await pg.click('[data-act="remove-inc-ok"]')
+        ex('削除した事案は一覧に出ない', await pg.locator('.item', has_text='水中捜索訓練').count(), 0)
+        ex('潜水の記録は消さずに残す', await pg.evaluate(js("const s = await getS(); const i = s.incidents.find(x => x.title === '=水中捜索訓練'); return [!!i.removed, i.divers.reduce((n, d) => n + d.dives.length, 0) > 0];"), None), [True, True])
+        await pg.click('[data-act="go"][data-to="settings"]')
+        ex('設定に「削除した事案」', await pg.locator('text=削除した事案（1件）').count(), 1)
+        await pg.click('[data-act="restore-inc"]')
+        await pg.click('[data-act="back"]')
+        ex('元に戻すと一覧に出る', await pg.locator('.item', has_text='水中捜索訓練').count(), 1)
 
         # 見本を消す：見本の隊員が入った事案も消える
         await pg.click('[data-act="sheet"][data-sheet="clearSample"]')
